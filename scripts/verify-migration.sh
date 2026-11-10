@@ -29,7 +29,9 @@ trap 'rm -rf "$TMP"' EXIT
 PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); echo "PASS: $*"; }
 bad() { FAIL=$((FAIL+1)); echo "FAIL: $*"; }
-run_cli() { (cd "$ROOT/server" && PUB_CACHE="$PUB_CACHE" $WANQI "$@" --server "$SERVER" --key "$KEY") ; }
+CLI_OUT="$TMP/cli-last.out"
+run_cli() { (cd "$ROOT/server" && PUB_CACHE="$PUB_CACHE" $WANQI "$@" --server "$SERVER" --key "$KEY") >"$CLI_OUT" 2>&1 ; }
+cli_show() { sed 's/^/  └─ CLI: /' "$CLI_OUT" | head -6; }
 apps_json() { curl -sf "$SERVER/api/v1/apps"; }
 
 # ---- 12 包清单:zip 文件名 appId code name entry backend(true/false)----
@@ -69,7 +71,7 @@ EOF
 echo "== 1. 逐包 install + 市场列表断言 =="
 for row in "${PKGS[@]}"; do
   read -r zip appid code _name entry backend <<<"$row"
-  if run_cli bundle install "$DIST/$zip" >/dev/null 2>&1; then ok "install $zip"; else bad "install $zip"; continue; fi
+  if run_cli bundle install "$DIST/$zip"; then ok "install $zip"; else bad "install $zip"; cli_show; continue; fi
   apps_json | python3 -c "
 import json,sys
 apps=json.load(sys.stdin)['apps']
@@ -125,23 +127,23 @@ with zipfile.ZipFile(src) as z, zipfile.ZipFile(dst,"w",zipfile.ZIP_DEFLATED) as
             data=json.dumps(b,ensure_ascii=False,indent=2).encode()
         out.writestr(n,data)
 EOF
-run_cli bundle upgrade "$TMP/$FLAPPY-11.zip" >/dev/null 2>&1 && ok "upgrade code+1" || bad "upgrade"
+run_cli bundle upgrade "$TMP/$FLAPPY-11.zip" && ok "upgrade code+1" || { bad "upgrade"; cli_show; }
 apps_json | python3 -c "
 import json,sys
 a=next(x for x in json.load(sys.stdin)['apps'] if x['appId']=='$FLAPPY')
 assert a['versionCode']==11, a['versionCode']" && ok "升级后 versionCode=11" || bad "升级后版本"
-run_cli bundle rollback --app "$FLAPPY" >/dev/null 2>&1 && ok "rollback" || bad "rollback"
+run_cli bundle rollback --app "$FLAPPY" && ok "rollback" || { bad "rollback"; cli_show; }
 apps_json | python3 -c "
 import json,sys
 a=next(x for x in json.load(sys.stdin)['apps'] if x['appId']=='$FLAPPY')
 assert a['versionCode']==10, a['versionCode']" && ok "回滚后 versionCode=10" || bad "回滚后版本"
-run_cli bundle remove --app "$FLAPPY" >/dev/null 2>&1 && ok "remove" || bad "remove"
+run_cli bundle remove --app "$FLAPPY" && ok "remove" || { bad "remove"; cli_show; }
 apps_json | python3 -c "
 import json,sys
 apps=json.load(sys.stdin)['apps']
 assert not any(x['appId']=='$FLAPPY' for x in apps), 'remove 后市场行仍在'" && ok "remove 后市场行已清" || bad "remove 后市场行"
 curl -sf "$SERVER$ROUTES_API" | grep -q "$FLAPPY" && bad "remove 后路由残留" || ok "remove 后路由已撤"
-run_cli bundle install "$DIST/$FLAPPY-10.zip" >/dev/null 2>&1 && ok "remove→install 同版本重装" || bad "同版本重装"
+run_cli bundle install "$DIST/$FLAPPY-10.zip" && ok "remove→install 同版本重装" || { bad "同版本重装"; cli_show; }
 apps_json | python3 -c "
 import json,sys
 a=next(x for x in json.load(sys.stdin)['apps'] if x['appId']=='$FLAPPY')
@@ -170,9 +172,9 @@ repack(f"{tmp}/no-manifest.zip","drop")
 repack(f"{tmp}/bad-appid.zip","appid")
 repack(f"{tmp}/rollback.zip","rollback")
 EOF
-run_cli bundle install "$TMP/no-manifest.zip" >/dev/null 2>&1 && bad "缺 bundle.json 竟被接受" || ok "缺 bundle.json 拒收"
-run_cli bundle install "$TMP/bad-appid.zip" >/dev/null 2>&1 && bad "appId 不一致竟被接受" || ok "appId 不一致拒收"
-run_cli bundle upgrade "$TMP/rollback.zip" >/dev/null 2>&1 && bad "versionCode 倒退竟被接受" || ok "versionCode 倒退拒收"
+run_cli bundle install "$TMP/no-manifest.zip" && bad "缺 bundle.json 竟被接受" || ok "缺 bundle.json 拒收"
+run_cli bundle install "$TMP/bad-appid.zip" && bad "appId 不一致竟被接受" || ok "appId 不一致拒收"
+run_cli bundle upgrade "$TMP/rollback.zip" && bad "versionCode 倒退竟被接受" || ok "versionCode 倒退拒收"
 apps_json | python3 -c "
 import json,sys
 a=next(x for x in json.load(sys.stdin)['apps'] if x['appId']=='$FLAPPY')
