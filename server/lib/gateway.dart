@@ -123,9 +123,14 @@ class Gateway {
 
   Future<shelf.Response> _remove(shelf.Request request, String appId, String prefix) async {
     if (!_publisher(request)) return _err(401, 'unauthorized');
-    await store.deleteRoute(appId, prefix);
+    // shelf_router 传回的路径参数保持百分号编码(实证:DELETE .../wx…/%2F 时
+    // prefix 到手是 '%2F' 而非 '/',WHERE 永不命中,0 行删除仍报 removed)。
+    // 先解码再删;appIds 是 [a-z0-9_],双重解码无副作用。
+    final String app = Uri.decodeComponent(appId);
+    final String pfx = Uri.decodeComponent(prefix);
+    await store.deleteRoute(app, pfx);
     await reload();
-    await db.audit('publisher', 'route.remove', '$appId$prefix');
+    await db.audit('publisher', 'route.remove', '$app$pfx');
     return _err(200, 'removed');
   }
 
