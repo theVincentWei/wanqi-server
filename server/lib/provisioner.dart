@@ -41,12 +41,13 @@ const Duration killGrace = Duration(seconds: 3);
 
 /// PATH injected into every backend process. A launchd-spawned server gets
 /// the minimal /usr/bin:/bin:/usr/sbin:/sbin environment, which misses both
-/// Homebrew's and user-local toolchains — backends must see the same
-/// toolchain an interactive shell does, so the common bin dirs are prepended
-/// to whatever the server itself inherited.
+/// Homebrew's and user-local toolchains. Order mirrors the user's
+/// interactive shell: ~/.local/bin first (the working node), then Homebrew —
+/// whose node is currently half-upgraded and crashes on a missing dylib —
+/// then whatever the server itself inherited.
 String backendPath() =>
-    '/opt/homebrew/bin:/usr/local/bin:'
     '${Platform.environment['HOME'] ?? '/root'}/.local/bin:'
+    '/opt/homebrew/bin:/usr/local/bin:'
     '${Platform.environment['PATH'] ?? '/usr/bin:/bin'}';
 
 class StartResult {
