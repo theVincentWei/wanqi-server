@@ -26,6 +26,17 @@ class DbConfig {
   final String database;
 }
 
+/// 推送分发配置(万器预留,v1 仅支持 'none' = 纯客户端拉)。未来接 APNs /
+/// 安卓厂商通道时在此加 dispatcher 取值与对应凭证段(见 docs/notify-push.md)。
+class PushConfig {
+  const PushConfig({this.dispatcher = 'none'});
+
+  final String dispatcher;
+
+  static PushConfig fromMap(Map<String, Object?>? raw) =>
+      PushConfig(dispatcher: raw?['dispatcher'] as String? ?? 'none');
+}
+
 class AppConfig {
   const AppConfig({
     required this.port,
@@ -38,7 +49,11 @@ class AppConfig {
     required this.appDbPassword,
     required this.engineLaunchUrl,
     required this.engineLaunchUrlFile,
+    this.push = const PushConfig(),
   });
+
+  /// 推送分发(万器预留,v1 'none')。
+  final PushConfig push;
 
   final int port;
   final DbConfig db;
@@ -120,6 +135,7 @@ class AppConfig {
       engineLaunchUrl: expand((decoded['engine'] as Map<String, Object?>?)?['launchUrl'] as String? ?? ''),
       engineLaunchUrlFile:
           expand((decoded['engine'] as Map<String, Object?>?)?['launchUrlFile'] as String? ?? ''),
+      push: PushConfig.fromMap(decoded['push'] as Map<String, Object?>?),
     );
   }
 }

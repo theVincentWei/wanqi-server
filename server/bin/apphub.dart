@@ -17,6 +17,7 @@ import 'package:apphub/db.dart';
 import 'package:apphub/gateway.dart';
 import 'package:apphub/market.dart';
 import 'package:apphub/notices.dart';
+import 'package:apphub/notify_push.dart';
 import 'package:apphub/obs.dart';
 import 'package:apphub/provisioner.dart';
 import 'package:apphub/store.dart';
@@ -44,10 +45,11 @@ Future<void> main(List<String> args) async {
   final Market market = Market(cfg, db, store);
   final Gateway gateway = Gateway(cfg, db, store);
   final Obs obs = Obs(cfg);
-  final Notices notices = Notices(db);
   final AiGateway ai = AiGateway(cfg, db, cfg.engineLaunchUrlFile);
   final Provisioner provisioner = Provisioner(cfg, db, store, gateway, http.Client());
   final BundleService bundle = BundleService(cfg, db, store, market, gateway, provisioner);
+  // 通知系统(契约 dimina-notify-contract v1;推送 v1 = none,纯客户端拉)。
+  final Notices notices = Notices(cfg, db, push: buildPushDispatcher(cfg.push.dispatcher));
   await gateway.reload();
 
   // ⑥ 常驻: every installed backend found on disk comes back up after a
@@ -97,6 +99,7 @@ Future<void> main(List<String> args) async {
   stdout.writeln('AppHub listening on :${server.port}');
   stdout.writeln('  market   /apps/<appId>/manifest.json  /packages/…  /api/v1/apps');
   stdout.writeln('  bundle   POST /api/v1/bundle/install  POST /api/v1/bundle/<id>/rollback  DELETE /api/v1/bundle/<id>');
+  stdout.writeln('  notify   /api/v1/apps/<appId>/notify(/templates|/token)  /api/v1/notices');
   stdout.writeln('  gateway  /api/v1/apps/<appId>/<prefix>/… → backends');
   stdout.writeln('  packages ${cfg.packagesDir}');
   stdout.writeln('  backends ${cfg.backendsDir}');
