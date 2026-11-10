@@ -5,6 +5,7 @@ library;
 
 import 'dart:io';
 
+import 'package:http/http.dart' as http;
 import 'package:mysql1/mysql1.dart' show ConnectionSettings;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -17,6 +18,7 @@ import 'package:apphub/gateway.dart';
 import 'package:apphub/market.dart';
 import 'package:apphub/notices.dart';
 import 'package:apphub/obs.dart';
+import 'package:apphub/provisioner.dart';
 import 'package:apphub/store.dart';
 
 Future<void> main(List<String> args) async {
@@ -44,8 +46,14 @@ Future<void> main(List<String> args) async {
   final Obs obs = Obs(cfg);
   final Notices notices = Notices(db);
   final AiGateway ai = AiGateway(cfg, db, cfg.engineLaunchUrlFile);
-  final BundleService bundle = BundleService(cfg, db, store, market, gateway);
+  final Provisioner provisioner = Provisioner(cfg, db, store, gateway, http.Client());
+  final BundleService bundle = BundleService(cfg, db, store, market, gateway, provisioner);
   await gateway.reload();
+
+  // ⑥ 常驻: every installed backend found on disk comes back up after a
+  // server restart (crash-supervised from here on).
+  final int restored = await provisioner.restoreAll();
+  if (restored > 0) stdout.writeln('provisioner: restored $restored backend(s)');
 
   final shelf.Handler handler = shelf.Cascade(statusCodes: <int>[404])
       .add(market.router.call)

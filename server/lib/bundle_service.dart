@@ -29,20 +29,25 @@ import 'config.dart';
 import 'db.dart';
 import 'gateway.dart';
 import 'market.dart';
+import 'provisioner.dart';
 import 'store.dart';
 
 class BundleService {
-  BundleService(this.cfg, this.db, this.store, this.market, this.gateway);
+  BundleService(this.cfg, this.db, this.store, this.market, this.gateway,
+      this.provisioner);
 
   final AppConfig cfg;
   final Db db;
   final Store store;
   final Market market;
   final Gateway gateway;
+  final Provisioner provisioner;
 
   shelf_router.Router get router {
     final router = shelf_router.Router()
       ..post('/api/v1/bundle/install', _install)
+      ..get('/api/v1/bundle', _statusAll)
+      ..get('/api/v1/bundle/<appId>', _status)
       ..post('/api/v1/bundle/<appId>/rollback', _rollback)
       ..delete('/api/v1/bundle/<appId>', _remove);
     return router;
@@ -131,43 +136,117 @@ class BundleService {
       action: 'bundle.install',
     );
 
-    // ③ unpack backend/ → backends/<appId>/current (previous kept)
+    // ③ unpack + ④ spawn (provisioned). The old process is stopped before
+    // the code dir rotates; a failed health gate rolls the code dirs back to
+    // previous and restarts it — "失败报错、保留旧版" (§5④/§6).
     int unpackedBytes = 0;
+    int? livePort;
     if (manifest.backend != null) {
+      await provisioner.stop(manifest.appId);
+      final BackendPaths paths = _paths(manifest.appId);
+      final bool hadPrevious = paths.hasPrevious;
       try {
         unpackedBytes = await installBackendDir(
             archive: archive, manifest: manifest, backendsRoot: cfg.backendsDir);
       } on BackendFsException catch (error) {
         return _err(500, 'backend unpack failed: $error');
       }
+      final StartResult started =
+          await provisioner.start(manifest.appId, manifest);
+      if (started.ok) {
+        livePort = started.port;
+      } else {
+        final String message =
+            'backend start failed: ${started.error}';
+        if (hadPrevious) {
+          await rollbackBackendDir(paths);
+          final BundleManifest? previous = _manifestAt(paths.current);
+          if (previous != null) {
+            final StartResult restored =
+                await provisioner.start(manifest.appId, previous);
+            if (!restored.ok) {
+              await _registerPlaceholders(
+                  manifest.appId,
+                  previous.backend?.gateway ?? const <String>[]);
+            }
+            await db.audit('bundle', 'bundle.install-rollback',
+                '${manifest.appId} v${manifest.versionCode} failed health; '
+                'previous v${previous.versionCode} restored');
+            return _json(<String, Object?>{
+              'error': message,
+              'rolledBackTo': previous.versionCode,
+              'appId': manifest.appId,
+              'versionCode': previous.versionCode,
+            }, 500);
+          }
+        }
+        await _registerPlaceholders(manifest.appId, manifest.backend!.gateway);
+        await db.audit('bundle', 'bundle.install',
+            '${manifest.appId} v${manifest.versionCode} start failed');
+        return _json(<String, Object?>{
+          'error': message,
+          'appId': manifest.appId,
+          'versionCode': manifest.versionCode,
+        }, 500);
+      }
+    } else {
+      // Pure frontend: a stale backend instance (if any) must not survive a
+      // backend-less upgrade.
+      await provisioner.stop(manifest.appId);
     }
 
-    // ⑤ routes: table state becomes exactly the declared gateway list.
+    // ⑤ routes: table state becomes exactly the declared gateway list. A
+    // live spawn already wrote the real targets; otherwise placeholders
+    // (task-4's spawn rewrites them, so a fresh install without a running
+    // backend — e.g. restore skipped — still records the declaration).
     final List<String> prefixes =
         manifest.backend?.gateway ?? const <String>[];
-    await store.deleteRoutesForApp(manifest.appId);
-    for (final String prefix in prefixes) {
-      await store.upsertRoute(
-          manifest.appId, prefix, bundleRoutePlaceholder, 5000, 120);
+    if (livePort == null) {
+      await store.deleteRoutesForApp(manifest.appId);
+      for (final String prefix in prefixes) {
+        await store.upsertRoute(
+            manifest.appId, prefix, bundleRoutePlaceholder, 5000, 120);
+      }
+      await gateway.reload();
+      await db.audit('bundle', 'bundle.routes',
+          '${manifest.appId} → $prefixes (placeholder targets)');
     }
-    await gateway.reload();
-    await db.audit('bundle', 'bundle.routes',
-        '${manifest.appId} → $prefixes (placeholder targets)');
 
     return _json(<String, Object?>{
       ...published,
       'backend': manifest.backend != null,
       'routes': prefixes,
+      if (livePort != null) 'port': livePort,
       if (manifest.backend != null)
         'backendStart': manifest.backend!.start,
       'unpackedBytes': unpackedBytes,
     });
   }
 
-  /// POST /api/v1/bundle/<appId>/rollback — §6: swap current/ ↔ previous/,
-  /// then re-register routes from the previous dir's bundle.json. The market
-  /// row stays on the newest frontend version (frontend rollback keeps using
-  /// the existing version-bump rollback; v1 scope per spec).
+  /// Parses the bundle.json inside a code dir; null when unreadable.
+  BundleManifest? _manifestAt(String dir) {
+    try {
+      return BundleManifest.parse(
+          jsonDecode(File(p.join(dir, 'bundle.json')).readAsStringSync()));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _registerPlaceholders(
+      String appId, List<String> prefixes) async {
+    await store.deleteRoutesForApp(appId);
+    for (final String prefix in prefixes) {
+      await store.upsertRoute(appId, prefix, bundleRoutePlaceholder, 5000, 120);
+    }
+    await gateway.reload();
+  }
+
+  /// POST /api/v1/bundle/<appId>/rollback — §6: stop the old process, swap
+  /// current/ ↔ previous/, respawn from the restored code dir and re-register
+  /// its routes. The market row stays on the newest frontend version
+  /// (frontend rollback keeps using the existing version-bump rollback; v1
+  /// scope per spec).
   Future<shelf.Response> _rollback(shelf.Request request, String appId) async {
     if (!_publisher(request)) return _err(401, 'unauthorized');
     if (!isValidAppId(appId)) return _err(400, 'invalid appId');
@@ -175,52 +254,64 @@ class BundleService {
       return _err(404, 'no such app');
     }
     final BackendPaths paths = _paths(appId);
+    await provisioner.stop(appId); // old process off before the dir swap
     try {
       await rollbackBackendDir(paths);
     } on BackendFsException catch (error) {
       return _err(409, error.message);
     }
 
-    // Re-register exactly the previous manifest's gateway list.
-    final File previousManifest = File(p.join(paths.current, 'bundle.json'));
-    List<String> prefixes = const <String>[];
-    int? rolledBackCode;
-    if (await previousManifest.exists()) {
-      try {
-        final BundleManifest manifest = BundleManifest.parse(jsonDecode(
-            await previousManifest.readAsString()));
-        prefixes = manifest.backend?.gateway ?? const <String>[];
-        rolledBackCode = manifest.versionCode;
-      } catch (_) {
-        return _err(500,
-            'rollback swapped dirs but previous/bundle.json is unreadable; routes untouched');
+    final BundleManifest? restored = _manifestAt(paths.current);
+    if (restored == null) {
+      return _err(500,
+          'rollback swapped dirs but current/bundle.json is unreadable; routes untouched');
+    }
+    final List<String> prefixes =
+        restored.backend?.gateway ?? const <String>[];
+    int? livePort;
+    if (restored.backend != null) {
+      final StartResult started = await provisioner.start(appId, restored);
+      if (started.ok) {
+        livePort = started.port;
+      } else {
+        // Respawn failed — record the declaration so ops sees the intent.
+        await _registerPlaceholders(appId, restored.backend!.gateway);
+        await db.audit('bundle', 'bundle.rollback',
+            '$appId -> v${restored.versionCode} but start failed');
+        return _json(<String, Object?>{
+          'error': 'rollback: backend start failed: ${started.error}',
+          'appId': appId,
+          'versionCode': restored.versionCode,
+          'routes': prefixes,
+        }, 500);
       }
+    } else {
+      // Rolling back to a pure-frontend version: declaration is "no routes".
       await store.deleteRoutesForApp(appId);
-      for (final String prefix in prefixes) {
-        await store.upsertRoute(
-            appId, prefix, bundleRoutePlaceholder, 5000, 120);
-      }
       await gateway.reload();
     }
     await db.audit('bundle', 'bundle.rollback',
-        '$appId -> v$rolledBackCode routes=$prefixes');
+        '$appId -> v${restored.versionCode} routes=$prefixes');
     return _json(<String, Object?>{
       'appId': appId,
-      'versionCode': rolledBackCode,
+      'versionCode': restored.versionCode,
       'routes': prefixes,
+      if (livePort != null) 'port': livePort,
     });
   }
 
-  /// DELETE /api/v1/bundle/<appId> — §6 remove: de-register routes, drop
-  /// code dirs and market rows. data/, logs/ and the per-app DB schema are
-  /// preserved so reinstalling the same bundle picks up where it left off
-  /// (and the version gate starts fresh — remove+install keeps versionCode).
+  /// DELETE /api/v1/bundle/<appId> — §6 remove: stop the process, de-register
+  /// routes, drop code dirs and market rows. data/, logs/ and the per-app DB
+  /// schema are preserved so reinstalling the same bundle picks up where it
+  /// left off (and the version gate starts fresh — remove+install keeps
+  /// versionCode).
   Future<shelf.Response> _remove(shelf.Request request, String appId) async {
     if (!_publisher(request)) return _err(401, 'unauthorized');
     if (!isValidAppId(appId)) return _err(400, 'invalid appId');
     if (await store.latestVersion(appId) == null) {
       return _err(404, 'no such app');
     }
+    await provisioner.stop(appId);
 
     final BackendPaths paths = _paths(appId);
     final bool hadData = paths.exists;
@@ -236,5 +327,22 @@ class BundleService {
       'removed': true,
       'dataKept': hadData,
     });
+  }
+
+  /// GET /api/v1/bundle — every supervised backend (ops / acceptance).
+  Future<shelf.Response> _statusAll(shelf.Request request) async {
+    if (!_publisher(request)) return _err(401, 'unauthorized');
+    return _json(<String, Object?>{'instances': provisioner.statusAll()});
+  }
+
+  /// GET /api/v1/bundle/<appId> — one backend's supervision state.
+  Future<shelf.Response> _status(shelf.Request request, String appId) async {
+    if (!_publisher(request)) return _err(401, 'unauthorized');
+    if (!isValidAppId(appId)) return _err(400, 'invalid appId');
+    final Map<String, Object?>? state = provisioner.status(appId);
+    if (state == null) {
+      return _err(404, 'no supervised backend for $appId');
+    }
+    return _json(state);
   }
 }
