@@ -76,7 +76,7 @@ apps=json.load(sys.stdin)['apps']
 a=next((x for x in apps if x['appId']=='$appid'),None)
 assert a, '$appid 不在列表'
 assert a['versionCode']==$code, f\"versionCode {a['versionCode']} != $code\"
-assert a.get('backend') is ${backend}, f\"backend {a.get('backend')} != ${backend}\"
+assert str(a.get('backend')).lower()=='$backend', f\"backend {a.get('backend')} != ${backend}\"
 assert a['path']=='$entry', f\"path {a['path']} != $entry\"
 " && ok "$appid 字段正确(code=$code backend=$backend path=$entry)" || bad "$appid 字段断言"
 done
