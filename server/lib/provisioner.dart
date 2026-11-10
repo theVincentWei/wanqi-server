@@ -39,6 +39,16 @@ const Duration stableAfter = Duration(seconds: 60);
 /// Grace period after SIGTERM before SIGKILL.
 const Duration killGrace = Duration(seconds: 3);
 
+/// PATH injected into every backend process. A launchd-spawned server gets
+/// the minimal /usr/bin:/bin:/usr/sbin:/sbin environment, which misses both
+/// Homebrew's and user-local toolchains — backends must see the same
+/// toolchain an interactive shell does, so the common bin dirs are prepended
+/// to whatever the server itself inherited.
+String backendPath() =>
+    '/opt/homebrew/bin:/usr/local/bin:'
+    '${Platform.environment['HOME'] ?? '/root'}/.local/bin:'
+    '${Platform.environment['PATH'] ?? '/usr/bin:/bin'}';
+
 class StartResult {
   const StartResult.ok(this.port, this.pid)
       : ok = true,
@@ -214,6 +224,7 @@ class Provisioner {
           'APPHUB_PORT': '$port',
           'APPHUB_APP_ID': instance.appId,
           'APPHUB_DB_URL': _dbUrl(instance.appId),
+          'PATH': backendPath(),
           if (entryFile.isNotEmpty) 'APPHUB_ENTRY': entryFile,
         },
       );
