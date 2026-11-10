@@ -23,7 +23,8 @@ Usage: wanqi — Wanqi Bundle CLI
 
   wanqi bundle install <zip>         install a bundle (first install or upgrade)
   wanqi bundle upgrade <zip>         upgrade (version.code must strictly increase)
-  wanqi bundle rollback --app <id>   swap backend current/ ↔ previous/
+  wanqi bundle rollback --app <id>   roll the whole bundle back to the previous
+                                     version (market row + backend code)
   wanqi bundle remove --app <id>     uninstall (data/logs/DB are kept)
   wanqi list                         list installed apps
 

@@ -242,59 +242,99 @@ class BundleService {
     await gateway.reload();
   }
 
-  /// POST /api/v1/bundle/<appId>/rollback — §6: stop the old process, swap
-  /// current/ ↔ previous/, respawn from the restored code dir and re-register
-  /// its routes. The market row stays on the newest frontend version
-  /// (frontend rollback keeps using the existing version-bump rollback; v1
-  /// scope per spec).
+  /// POST /api/v1/bundle/<appId>/rollback — Bundle-level rollback (§6, with
+  /// §1 "一个 Bundle 一个版本号" semantics): the market rows re-point at the
+  /// previous version (versionCode truly goes back), and the backend half is
+  /// re-derived from the donor zip itself so market/code/routes can never
+  /// diverge. Pure-frontend donors (or legacy pre-bundle zips) simply have no
+  /// backend half — no 409 for missing backend dirs.
   Future<shelf.Response> _rollback(shelf.Request request, String appId) async {
     if (!_publisher(request)) return _err(401, 'unauthorized');
     if (!isValidAppId(appId)) return _err(400, 'invalid appId');
-    if (await store.latestVersion(appId) == null) {
-      return _err(404, 'no such app');
-    }
-    final BackendPaths paths = _paths(appId);
-    await provisioner.stop(appId); // old process off before the dir swap
-    try {
-      await rollbackBackendDir(paths);
-    } on BackendFsException catch (error) {
-      return _err(409, error.message);
+    final latest = await store.latestVersion(appId);
+    if (latest == null) return _err(404, 'no such app');
+    final donor = await store.versionBelow(appId, latest['version_code'] as int);
+    if (donor == null) return _err(409, 'only one version — nothing to roll back to');
+    final int donorCode = donor['version_code'] as int;
+    final File donorZip = File(cfg.packagePath(appId, donorCode));
+    if (!await donorZip.exists()) {
+      return _err(500, 'donor package file missing: ${p.basename(donorZip.path)}');
     }
 
-    final BundleManifest? restored = _manifestAt(paths.current);
-    if (restored == null) {
-      return _err(500,
-          'rollback swapped dirs but current/bundle.json is unreadable; routes untouched');
+    // Whatever is running goes down before anything moves.
+    await provisioner.stop(appId);
+
+    // Market: drop newer rows — latest is now the donor, versionCode truly
+    // reverted. The newer zips stay on disk (a re-upgrade re-inserts them).
+    await store.deleteVersionsAbove(appId, donorCode);
+
+    // Backend: re-derive from the donor zip (the same bytes the market now
+    // serves — single source of truth).
+    final Archive donorArchive;
+    try {
+      donorArchive = ZipDecoder()
+          .decodeBytes(await donorZip.readAsBytes(), verify: true);
+    } catch (_) {
+      return _err(500, 'donor package ${p.basename(donorZip.path)} is not a zip');
     }
-    final List<String> prefixes =
-        restored.backend?.gateway ?? const <String>[];
+    final ArchiveFile? manifestEntry = bundleEntry(donorArchive, 'bundle.json');
+    BundleManifest? donorManifest;
+    if (manifestEntry != null) {
+      try {
+        donorManifest = BundleManifest.parse(jsonDecode(utf8.decode(
+            Uint8List.fromList(manifestEntry.content as List<int>),
+            allowMalformed: true)));
+      } catch (_) {
+        donorManifest = null; // legacy/unreadable manifest → frontend-only
+      }
+    }
+    final List<String> prefixes;
     int? livePort;
-    if (restored.backend != null) {
-      final StartResult started = await provisioner.start(appId, restored);
-      if (started.ok) {
-        livePort = started.port;
-      } else {
-        // Respawn failed — record the declaration so ops sees the intent.
-        await _registerPlaceholders(appId, restored.backend!.gateway);
+    if (donorManifest?.backend != null) {
+      final BundleManifest manifest = donorManifest!;
+      try {
+        await installBackendDir(
+            archive: donorArchive, manifest: manifest, backendsRoot: cfg.backendsDir);
+      } on BackendFsException catch (error) {
+        return _err(500, 'rollback: backend unpack failed: $error');
+      }
+      final StartResult started = await provisioner.start(appId, manifest);
+      prefixes = manifest.backend!.gateway;
+      if (!started.ok) {
+        await _registerPlaceholders(appId, prefixes);
         await db.audit('bundle', 'bundle.rollback',
-            '$appId -> v${restored.versionCode} but start failed');
+            '$appId -> v$donorCode but start failed');
         return _json(<String, Object?>{
           'error': 'rollback: backend start failed: ${started.error}',
           'appId': appId,
-          'versionCode': restored.versionCode,
+          'versionCode': donorCode,
           'routes': prefixes,
         }, 500);
       }
+      livePort = started.port;
+      await store.upsertApp(appId, manifest.name, manifest.frontendEntry,
+          backend: true);
     } else {
-      // Rolling back to a pure-frontend version: declaration is "no routes".
+      // Frontend-only donor (or legacy zip without bundle.json): the backend
+      // half goes away entirely — code dirs deleted, data/logs/DB kept.
+      await removeBackendDirs(_paths(appId));
       await store.deleteRoutesForApp(appId);
       await gateway.reload();
+      prefixes = const <String>[];
+      if (donorManifest != null) {
+        await store.upsertApp(appId, donorManifest.name,
+            donorManifest.frontendEntry, backend: false);
+      } else {
+        await store.setAppBackend(appId, false);
+      }
     }
+
     await db.audit('bundle', 'bundle.rollback',
-        '$appId -> v${restored.versionCode} routes=$prefixes');
+        '$appId -> v$donorCode routes=$prefixes');
     return _json(<String, Object?>{
       'appId': appId,
-      'versionCode': restored.versionCode,
+      'versionCode': donorCode,
+      'versionName': donor['version_name'],
       'routes': prefixes,
       if (livePort != null) 'port': livePort,
     });

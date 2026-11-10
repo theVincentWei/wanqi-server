@@ -69,6 +69,23 @@ class Store {
     await db.exec('DELETE FROM apps WHERE app_id = ?', [appId]);
   }
 
+  /// Bundle-level rollback (§6): re-points the market at an older version by
+  /// dropping every newer row. The zips stay on disk, so a re-upgrade just
+  /// re-inserts them. (The legacy 旧包新版本号 rollback above never
+  /// downgrades versionCode — that guard protects Dimina pulls, while bundle
+  /// rollback is an operator action that intentionally reverts the code.)
+  Future<void> deleteVersionsAbove(String appId, int code) async {
+    await db.exec(
+        'DELETE FROM app_versions WHERE app_id = ? AND version_code > ?',
+        [appId, code]);
+  }
+
+  /// Backend flag without touching name/path (legacy-donor rollbacks).
+  Future<void> setAppBackend(String appId, bool backend) async {
+    await db.exec('UPDATE apps SET backend = ? WHERE app_id = ?',
+        [backend ? 1 : 0, appId]);
+  }
+
   Future<void> insertVersion({
     required String appId,
     required int versionCode,

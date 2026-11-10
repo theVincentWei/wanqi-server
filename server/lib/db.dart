@@ -26,6 +26,13 @@ class Db {
     return conn;
   }
 
+  /// Closes the connection (graceful shutdown, tests).
+  Future<void> close() async {
+    final MySqlConnection? conn = _conn;
+    _conn = null;
+    await conn?.close();
+  }
+
   /// Normalises mysql1 0.22 values for JSON: VARCHAR columns arrive as
   /// strings, but TEXT/MEDIUMTEXT columns come back as [Blob] and TIMESTAMPs
   /// as [DateTime] — neither is jsonEncode-able until converted here.
