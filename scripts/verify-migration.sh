@@ -36,18 +36,18 @@ apps_json() { curl -sf "$SERVER/api/v1/apps"; }
 
 # ---- 12 包清单:zip 文件名 appId code name entry backend(true/false)----
 PKGS=(
-  "wx5b8e2f4a9c1d7e60-10.zip wx5b8e2f4a9c1d7e60 10 Flappy_Bird game false"
-  "wx2f8a4c6e1d3b5a79-14.zip wx2f8a4c6e1d3b5a79 14 GLM app false"
-  "wx3d7b2f91c4a8e5d6-13.zip wx3d7b2f91c4a8e5d6 13 three-bench game false"
-  "wx9d4e6a2c8b1f7e35-4.zip  wx9d4e6a2c8b1f7e35 4  webbench pages/index/index false"
-  "wx92269e3b2f304afc-73.zip wx92269e3b2f304afc 73 weui example/index false"
-  "wx3d8b6f2a9c4e7d15-20.zip wx3d8b6f2a9c4e7d15 20 shuangpin pages/home/home false"
-  "wx8c4e2f6a9d1b7e53-10.zip wx8c4e2f6a9d1b7e53 10 star-drift game false"
-  "darkmode-demo-3.zip       darkmode-demo      3  darkmode pages/index/index false"
-  "wx8d31a5f0c94b27e6-8.zip  wx8d31a5f0c94b27e6 8  sys-monitor pages/index/index true"
-  "wx7c3e9d2a1b4f5e68-4.zip  wx7c3e9d2a1b4f5e68 4  ledger pages/list/list false"
-  "wx5f8a2d7c9e1b4f30-2.zip  wx5f8a2d7c9e1b4f30 2  road-hop game false"
-  "wx3a7f2c9e1b8d4f56-1.zip  wx3a7f2c9e1b8d4f56 1  audio pages/audio/audio false"
+  "wx5b8e2f4a9c1d7e60-10.zip wx5b8e2f4a9c1d7e60 10 game false"
+  "wx2f8a4c6e1d3b5a79-14.zip wx2f8a4c6e1d3b5a79 14 pages/index/index false"
+  "wx3d7b2f91c4a8e5d6-13.zip wx3d7b2f91c4a8e5d6 13 game false"
+  "wx9d4e6a2c8b1f7e35-4.zip  wx9d4e6a2c8b1f7e35 4  pages/index/index false"
+  "wx92269e3b2f304afc-73.zip wx92269e3b2f304afc 73 example/index false"
+  "wx3d8b6f2a9c4e7d15-20.zip wx3d8b6f2a9c4e7d15 20 pages/home/home false"
+  "wx8c4e2f6a9d1b7e53-10.zip wx8c4e2f6a9d1b7e53 10 game false"
+  "darkmode-demo-3.zip       darkmode-demo      3  pages/index/index false"
+  "wx8d31a5f0c94b27e6-8.zip  wx8d31a5f0c94b27e6 8  pages/index/index true"
+  "wx7c3e9d2a1b4f5e68-4.zip  wx7c3e9d2a1b4f5e68 4  pages/list/list false"
+  "wx5f8a2d7c9e1b4f30-2.zip  wx5f8a2d7c9e1b4f30 2  game false"
+  "wx3a7f2c9e1b8d4f56-1.zip  wx3a7f2c9e1b8d4f56 1  pages/audio/audio false"
 )
 FLAPPY=wx5b8e2f4a9c1d7e60
 SYSMON=wx8d31a5f0c94b27e6
@@ -70,7 +70,7 @@ EOF
 
 echo "== 1. 逐包 install + 市场列表断言 =="
 for row in "${PKGS[@]}"; do
-  read -r zip appid code _name entry backend <<<"$row"
+  read -r zip appid code entry backend <<<"$row"
   if run_cli bundle install "$DIST/$zip"; then ok "install $zip"; else bad "install $zip"; cli_show; continue; fi
   apps_json | python3 -c "
 import json,sys
@@ -87,7 +87,7 @@ n=$(apps_json | python3 -c "import json,sys; print(len(json.load(sys.stdin)['app
 
 echo "== 2. manifest / sha256 / 包下载链路 =="
 for row in "${PKGS[@]}"; do
-  read -r zip appid code _name _entry _backend <<<"$row"
+  read -r zip appid code _entry _backend <<<"$row"
   murl="$(printf "$MANIFEST_T" "$appid")"
   curl -sf "$murl" | python3 -c "import json,sys; json.load(sys.stdin)" && ok "manifest 200 合法 $appid" || bad "manifest $appid"
   apps_json | python3 -c "
