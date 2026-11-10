@@ -11,8 +11,10 @@ import type { ProcessListPayload } from './process-sample.ts';
  * sys-monitor daemon 入口（spec-096 FR-1574/1578；#612 修订采样面）：
  *
  * ① HTTP 数据面：裸 node:http，绑 127.0.0.1（Server 哑水管转发目标）。
- *    端口 env `SYS_MONITOR_DAEMON_PORT` 缺省 **9207**（spec-096 定档）；
- *    server.yaml miniapp_backends 条目的 backend_token 经 env 注入执法（可选）。
+ *    端口 env 优先级：`APPHUB_PORT`（wanqi/Bundle v1 托管注入，规范写死）
+ *    > `BAIGONG_HEALTH_PORT`（dsh-go 安装腿注入）> `SYS_MONITOR_DAEMON_PORT`
+ *    （spec-096 开发缺省 **9207**）；server.yaml miniapp_backends 条目的
+ *    backend_token 经 env 注入执法（可选）。
  * ② 采集定时器（#612 双档修订：**唯一常驻句柄不变**，FR-1578 纪律照守）：
  *    - 快档（缓存档）：env `SYS_MONITOR_CACHE_SEC` 缺省 30s 一拍，现采 →
  *      写内存缓存（/stats 秒回数据源；修「现采 top -l 2 两拍 4s 撞 h5 2s 轮询
@@ -98,11 +100,9 @@ export async function startDaemonServer(options: DaemonOptions = {}): Promise<Da
     killDeps: { runCmd: options.testDeps?.runCmd, selfPid: process.pid },
   });
   const server = createServer(handler as (req: IncomingMessage, res: ServerResponse) => void);
-  // FR-1654（spec 109 v0.60）安装注入链接管形态：BAIGONG_HEALTH_PORT env 在场
-  // （FR-1651 注入腿端口通道）→ 注入端口优先（安装腿派生端口是真值；spec-096
-  // 缺省 9207 仅开发裸跑缺省面）。
-  const injected = Number.parseInt(process.env.BAIGONG_HEALTH_PORT ?? '', 10);
-  const port = options.port ?? (Number.isInteger(injected) && injected > 0 ? injected : portFromEnv());
+  // 端口统一走 portFromEnv：APPHUB_PORT（Bundle v1）> BAIGONG_HEALTH_PORT（dsh-go
+  // 安装腿，FR-1654）> SYS_MONITOR_DAEMON_PORT（spec-096 缺省 9207 仅开发裸跑缺省面）。
+  const port = options.port ?? portFromEnv();
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, options.host ?? '127.0.0.1', () => {
@@ -137,12 +137,17 @@ export async function startDaemonServer(options: DaemonOptions = {}): Promise<Da
   };
 }
 
-/** 端口 env 解析（glm-quota portFromEnv 同款；坏值落缺省不崩）。 */
+/** 端口 env 解析（glm-quota portFromEnv 同款；坏值落缺省不崩）。
+ *  优先级：APPHUB_PORT（Bundle v1 托管注入）> BAIGONG_HEALTH_PORT（dsh-go 安装腿）
+ *  > SYS_MONITOR_DAEMON_PORT（spec-096 开发口）> 9207。 */
 export function portFromEnv(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.SYS_MONITOR_DAEMON_PORT?.trim();
-  if (raw !== undefined && raw !== '') {
-    const parsed = Number(raw);
-    if (Number.isInteger(parsed) && parsed > 0 && parsed < 65536) return parsed;
+  const candidates = [env.APPHUB_PORT, env.BAIGONG_HEALTH_PORT, env.SYS_MONITOR_DAEMON_PORT];
+  for (const raw of candidates) {
+    const trimmed = raw?.trim();
+    if (trimmed !== undefined && trimmed !== '') {
+      const parsed = Number(trimmed);
+      if (Number.isInteger(parsed) && parsed > 0 && parsed < 65536) return parsed;
+    }
   }
   return DEFAULT_PORT;
 }
@@ -176,10 +181,10 @@ export function cacheSecFromEnv(options: Pick<DaemonOptions, 'cacheSec'> = {}, e
 async function main(): Promise<void> {
   // FR-1654（spec 109 v0.60）安装注入链接管形态：token 通道单一来源——
   // 注入腿 env BAIGONG_BACKEND_TOKEN 在场优先，回落 spec-096 手工条目 env 名。
+  // 端口统一走 portFromEnv（APPHUB_PORT > BAIGONG_HEALTH_PORT > SYS_MONITOR_DAEMON_PORT > 9207）。
   const backendToken = process.env.BAIGONG_BACKEND_TOKEN ?? process.env.SYS_MONITOR_BACKEND_TOKEN;
-  const injectedPort = Number.parseInt(process.env.BAIGONG_HEALTH_PORT ?? '', 10);
   const handle = await startDaemonServer({
-    port: Number.isInteger(injectedPort) && injectedPort > 0 ? injectedPort : portFromEnv(),
+    port: portFromEnv(),
     backendToken: backendToken !== undefined && backendToken !== '' ? backendToken : undefined,
     warmup: true,
   });
