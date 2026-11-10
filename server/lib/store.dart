@@ -43,13 +43,30 @@ class Store {
 
   final Db db;
 
+  /// [backend] tri-state: null = leave the stored flag alone (plain publish),
+  /// true/false = bundle install/remove owns it (Bundle v1 §5⑤).
   Future<void> upsertApp(String appId, String name, String path,
-      {String? description, String? category}) async {
+      {String? description, String? category, bool? backend}) async {
     await db.exec(
-        'INSERT INTO apps (app_id, name, path, description, category) VALUES (?, ?, ?, ?, ?) '
+        'INSERT INTO apps (app_id, name, path, description, category, backend) VALUES (?, ?, ?, ?, ?, ?) '
         'ON DUPLICATE KEY UPDATE name = VALUES(name), path = VALUES(path), '
-        'description = VALUES(description), category = VALUES(category)',
-        [appId, name, path, description, category]);
+        'description = VALUES(description), category = VALUES(category), '
+        'backend = COALESCE(VALUES(backend), backend)',
+        [
+          appId,
+          name,
+          path,
+          description,
+          category,
+          backend == null ? null : (backend ? 1 : 0),
+        ]);
+  }
+
+  /// Uninstall (Bundle v1 §6 remove): drops the market rows. Package zips,
+  /// install events and the per-app DB schema are intentionally kept.
+  Future<void> deleteApp(String appId) async {
+    await db.exec('DELETE FROM app_versions WHERE app_id = ?', [appId]);
+    await db.exec('DELETE FROM apps WHERE app_id = ?', [appId]);
   }
 
   Future<void> insertVersion({
@@ -123,7 +140,7 @@ class Store {
 
   Future<List<Map<String, Object?>>> listApps() async {
     final List<Map<String, Object?>> rows = await db.q(
-        'SELECT a.app_id, a.name, a.path, a.category, a.created_at, '
+        'SELECT a.app_id, a.name, a.path, a.category, a.backend, a.created_at, '
         'v.version_code, v.version_name, v.sha256, v.changelog, v.icon, v.icon_file, '
         // listing_json 只为取列表行的一行副标题,解析失败按空串降级。
         'v.listing_json, v.size_bytes '
@@ -138,6 +155,7 @@ class Store {
           'name': row['name'],
           'path': row['path'],
           'category': row['category'],
+          'backend': (_int(row['backend']) ?? 0) != 0,
           'versionCode': _int(row['version_code']),
           'versionName': row['version_name'],
           'sha256': row['sha256'],
@@ -198,6 +216,12 @@ class Store {
   Future<void> deleteRoute(String appId, String prefix) async {
     await db.exec('DELETE FROM app_routes WHERE app_id = ? AND prefix = ?',
         [appId, prefix]);
+  }
+
+  /// Every route of one app — bundle install/remove own the full set (the
+  /// table state after install is exactly bundle.json's gateway list).
+  Future<void> deleteRoutesForApp(String appId) async {
+    await db.exec('DELETE FROM app_routes WHERE app_id = ?', [appId]);
   }
 
   Future<List<Map<String, Object?>>> listRoutes() async {

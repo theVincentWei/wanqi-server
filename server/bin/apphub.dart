@@ -10,6 +10,7 @@ import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
 import 'package:apphub/ai_gateway.dart';
+import 'package:apphub/bundle_service.dart';
 import 'package:apphub/config.dart';
 import 'package:apphub/db.dart';
 import 'package:apphub/gateway.dart';
@@ -43,10 +44,12 @@ Future<void> main(List<String> args) async {
   final Obs obs = Obs(cfg);
   final Notices notices = Notices(db);
   final AiGateway ai = AiGateway(cfg, db, cfg.engineLaunchUrlFile);
+  final BundleService bundle = BundleService(cfg, db, store, market, gateway);
   await gateway.reload();
 
   final shelf.Handler handler = shelf.Cascade(statusCodes: <int>[404])
       .add(market.router.call)
+      .add(bundle.router.call)
       .add(gateway.adminRouter.call)
       .add(obs.router.call)
       .add(notices.router.call)
@@ -67,7 +70,9 @@ Future<void> main(List<String> args) async {
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, cfg.port);
   stdout.writeln('AppHub listening on :${server.port}');
   stdout.writeln('  market   /apps/<appId>/manifest.json  /packages/…  /api/v1/apps');
+  stdout.writeln('  bundle   POST /api/v1/bundle/install  POST /api/v1/bundle/<id>/rollback  DELETE /api/v1/bundle/<id>');
   stdout.writeln('  gateway  /api/v1/apps/<appId>/<prefix>/… → backends');
   stdout.writeln('  packages ${cfg.packagesDir}');
+  stdout.writeln('  backends ${cfg.backendsDir}');
   stdout.writeln('  logs     ${cfg.engineAppsDir}/<appId>/data/logs/');
 }

@@ -33,6 +33,7 @@ class AppConfig {
     required this.publisherKey,
     required this.deviceToken,
     required this.dataDir,
+    required this.backendsDir,
     required this.engineAppsDir,
     required this.appDbPassword,
     required this.engineLaunchUrl,
@@ -51,6 +52,10 @@ class AppConfig {
 
   /// Package store: <dataDir>/packages/<appId>-<versionCode>.zip
   final String dataDir;
+
+  /// Installed backend code dirs: <backendsDir>/<appId>/{current,previous,data,logs}
+  /// (Bundle v1 §4). Defaults to <dataDir>/backends.
+  final String backendsDir;
 
   /// The engine's ~/dsh/apps — observation logs land in
   /// <engineAppsDir>/<appId>/data/logs/ where the Agent reads them.
@@ -94,6 +99,8 @@ class AppConfig {
         (decoded['db'] ?? <String, Object?>{}) as Map<String, Object?>;
     final String home = Platform.environment['HOME'] ?? '/tmp';
     String expand(String raw) => raw.startsWith('~') ? p.join(home, raw.substring(1)) : raw;
+    final String dataDir =
+        expand((decoded['dataDir'] as String?) ?? '~/dsh/apphub');
     return AppConfig(
       port: (decoded['port'] as num?)?.toInt() ?? 7610,
       db: DbConfig(
@@ -105,7 +112,9 @@ class AppConfig {
       ),
       publisherKey: (decoded['publisherKey'] as String?) ?? '',
       deviceToken: (decoded['deviceToken'] as String?) ?? '',
-      dataDir: expand((decoded['dataDir'] as String?) ?? '~/dsh/apphub'),
+      dataDir: dataDir,
+      backendsDir:
+          expand((decoded['backendsDir'] as String?) ?? p.join(dataDir, 'backends')),
       engineAppsDir: expand((decoded['engineAppsDir'] as String?) ?? '~/dsh/apps'),
       appDbPassword: (decoded['appDbPassword'] as String?) ?? 'app-apphub-local',
       engineLaunchUrl: expand((decoded['engine'] as Map<String, Object?>?)?['launchUrl'] as String? ?? ''),

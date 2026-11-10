@@ -62,6 +62,7 @@ class Db {
         'path VARCHAR(256) NOT NULL,'
         'description VARCHAR(256) NULL,'
         'category VARCHAR(32) NULL,'
+        'backend TINYINT NOT NULL DEFAULT 0,'
         'channel VARCHAR(16) NOT NULL DEFAULT "stable",'
         'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
     await exec('CREATE TABLE IF NOT EXISTS app_versions ('
@@ -105,6 +106,9 @@ class Db {
     for (final String sql in <String>[
       'ALTER TABLE apps ADD COLUMN description VARCHAR(256) NULL',
       'ALTER TABLE apps ADD COLUMN category VARCHAR(32) NULL',
+      // Bundle v1(2026-11-11):市场行带 backend 标志(bundle.json 有 backend
+      // 段的 app 才为 1;bundle remove 时清零/随行删除)。
+      'ALTER TABLE apps ADD COLUMN backend TINYINT NOT NULL DEFAULT 0',
       'ALTER TABLE app_versions ADD COLUMN changelog MEDIUMTEXT NULL',
       'ALTER TABLE app_versions ADD COLUMN icon VARCHAR(16) NULL',
       'ALTER TABLE app_versions ADD COLUMN icon_file VARCHAR(128) NULL',

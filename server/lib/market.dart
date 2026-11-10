@@ -175,6 +175,14 @@ class Market {
     return rows.isEmpty ? 'pages/index/index' : (rows.first['path'] as String? ?? 'pages/index/index');
   }
 
+  /// Bundle v1: whether the app shipped a backend section (market row flag).
+  Future<bool> _appBackend(String appId) async {
+    final rows = await db.q('SELECT backend FROM apps WHERE app_id = ?', [appId]);
+    if (rows.isEmpty) return false;
+    final Object? value = rows.first['backend'];
+    return value is int ? value != 0 : int.tryParse(value.toString()) != 0;
+  }
+
   /// HTTP headers are latin-1; UTF-8 metadata (Chinese names) travels base64.
   Future<String?> _metaUtf8(shelf.Request request, String header) async {
     final String? b64 = request.headers[header];
@@ -312,6 +320,7 @@ class Market {
       'appId': appId,
       'name': await _appName(appId, fallback: appId),
       'path': await _appPath(appId),
+      'backend': await _appBackend(appId),
       'description': description,
       'category': category,
       'versionCode': version?['version_code'],
@@ -432,6 +441,60 @@ class Market {
       }
     }
 
+    final String name = await _metaUtf8(request, 'x-app-name-b64') ??
+        request.headers['x-app-name'] ??
+        appId;
+    final String path = await _metaUtf8(request, 'x-app-path-b64') ??
+        request.headers['x-app-path'] ??
+        'pages/index/index';
+    final String? description = await _metaUtf8(request, 'x-app-desc-b64');
+    final String? category = request.headers['x-app-category'];
+    final String? changelog = await _metaUtf8(request, 'x-changelog-b64');
+    final String versionName = request.headers['x-version-name'] ?? '0.0.$versionCode';
+    return _json(await publishVersion(
+      archive: archive,
+      bytes: bytes,
+      appId: appId,
+      name: name,
+      path: path,
+      versionCode: versionCode,
+      versionName: versionName,
+      latest: latest,
+      changelog: changelog,
+      iconKey: request.headers['x-icon'],
+      toolsJson: toolsJson,
+      minContainer: request.headers['x-min-container'],
+      description: description,
+      category: category,
+      actor: 'publisher',
+      action: 'publish',
+    ));
+  }
+
+  /// Shared tail of every publish path — plain header-driven publish and
+  /// bundle install alike: writes the zip + extracted icon + store listing,
+  /// inserts the version row, provisions the per-app DB and audits. [latest]
+  /// feeds the inheritance rules (a bare republish must never blank the icon
+  /// or the store page out of the market). Returns the response payload.
+  Future<Map<String, Object?>> publishVersion({
+    required Archive archive,
+    required List<int> bytes,
+    required String appId,
+    required String name,
+    required String path,
+    required int versionCode,
+    required String versionName,
+    required Map<String, Object?>? latest,
+    String? changelog,
+    String? iconKey,
+    String? toolsJson,
+    String? minContainer,
+    String? description,
+    String? category,
+    bool? backend,
+    String actor = 'publisher',
+    String action = 'publish',
+  }) async {
     final String sha256hex = sha256.convert(bytes).toString();
     final File target = File(cfg.packagePath(appId, versionCode));
     await target.parent.create(recursive: true);
@@ -456,9 +519,7 @@ class Market {
     // previous version's icon — a bare republish must never blank the icon
     // out of the market. Explicit metadata always wins.
     final String? icon =
-        (request.headers['x-icon']?.isNotEmpty ?? false)
-            ? request.headers['x-icon']
-            : iconFile ?? latest?['icon'] as String?;
+        (iconKey?.isNotEmpty ?? false) ? iconKey : iconFile ?? latest?['icon'] as String?;
     iconFile ??= latest?['icon_file'] as String?;
 
     // Store listing: optional main/store.json carries the App Store-style
@@ -486,17 +547,8 @@ class Market {
     final String? listingJson =
         listing != null ? jsonEncode(listing) : latest?['listing_json'] as String?;
 
-    final String name = await _metaUtf8(request, 'x-app-name-b64') ??
-        request.headers['x-app-name'] ??
-        appId;
-    final String path = await _metaUtf8(request, 'x-app-path-b64') ??
-        request.headers['x-app-path'] ??
-        'pages/index/index';
-    final String? description = await _metaUtf8(request, 'x-app-desc-b64');
-    final String? category = request.headers['x-app-category'];
-    final String? changelog = await _metaUtf8(request, 'x-changelog-b64');
-    final String versionName = request.headers['x-version-name'] ?? '0.0.$versionCode';
-    await store.upsertApp(appId, name, path, description: description, category: category);
+    await store.upsertApp(appId, name, path,
+        description: description, category: category, backend: backend);
     await store.insertVersion(
       appId: appId,
       versionCode: versionCode,
@@ -508,13 +560,13 @@ class Market {
       icon: icon,
       iconFile: iconFile,
       toolsJson: toolsJson,
-      minContainer: request.headers['x-min-container'],
+      minContainer: minContainer,
       listingJson: listingJson,
     );
     await store.provisionAppDb(appId, cfg.appDbPassword);
-    await db.audit('publisher', 'publish', '$appId v$versionCode sha=$sha256hex');
+    await db.audit(actor, action, '$appId v$versionCode sha=$sha256hex');
 
-    return _json(<String, Object?>{
+    return <String, Object?>{
       'appId': appId,
       'versionCode': versionCode,
       'versionName': versionName,
@@ -522,7 +574,7 @@ class Market {
       'sizeBytes': bytes.length,
       // 本次发布是否真的带上了 store.json(继承来的不算),方便发布方核对。
       'listing': hasListing,
-    });
+    };
   }
 
   /// Resolves [rawStore]['screenshots'] (the as-authored store.json map —
