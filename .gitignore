@@ -1,0 +1,4 @@
+.pub-cache/
+server/config.local.json
+server/.dart_tool/
+**/build/

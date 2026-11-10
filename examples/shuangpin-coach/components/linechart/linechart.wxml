@@ -1,0 +1,3 @@
+<view class="lc {{mini ? 'lc-mini' : ''}}">
+  <canvas type="2d" id="cv" class="cv"></canvas>
+</view>

@@ -1,0 +1,170 @@
+/* 统计 Tab 样式:mockup ⑥ 屏落地(px → rpx ×1.92),颜色全走 app.wxss 变量。 */
+.page {
+  padding: 8rpx 0 40rpx;
+}
+
+/* seg:总览可用,韵母/词语置灰占位(seg/seg-i 基础样式在 app.wxss) */
+.tabs {
+  margin: 12rpx 31rpx 0;
+}
+.seg-i.off {
+  opacity: 0.45;
+}
+
+/* 三卡 */
+.stat3 {
+  display: flex;
+  gap: 19rpx;
+  margin: 19rpx 31rpx 0;
+}
+.sc {
+  flex: 1;
+  background: var(--panel);
+  border: 1rpx solid var(--line);
+  border-radius: 23rpx;
+  padding: 21rpx 0;
+  text-align: center;
+}
+.sc-num {
+  font-size: 35rpx;
+  font-weight: 700;
+  color: var(--fg);
+}
+.sc-label {
+  font-size: 21rpx;
+  color: var(--fg3);
+  margin-top: 6rpx;
+}
+
+/* 卡头(标题 + 右侧副标/图例) */
+.card-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.card-sub {
+  flex: 1;
+  margin-left: 12rpx;
+  text-align: right;
+  font-size: 23rpx;
+  font-weight: 400;
+  color: var(--fg3);
+}
+
+/* 图例:正确率-蓝、速度-橙(mockup 色块小样) */
+.lg {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  font-size: 21rpx;
+  color: var(--fg3);
+  font-weight: 400;
+}
+.lg-i {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+.ln {
+  width: 27rpx;
+  height: 6rpx;
+  border-radius: 4rpx;
+}
+.l1 { background: var(--acc); }
+.l2 { background: var(--hot); }
+
+.chart-wrap {
+  margin-top: 12rpx;
+}
+
+/* 薄弱韵母:名称 + 横向条形 + 百分比 + 专练 */
+.wrow {
+  display: flex;
+  align-items: center;
+  gap: 19rpx;
+  margin-top: 19rpx;
+}
+.wn {
+  width: 81rpx;
+  font-size: 25rpx;
+  color: var(--fg2);
+}
+.bar {
+  flex: 1;
+  height: 15rpx;
+  background: var(--track);
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+.bar-i {
+  height: 100%;
+  border-radius: 8rpx;
+}
+.bar-i.acc { background: var(--acc); }
+.bar-i.hot { background: var(--hot); }
+.bar-i.err { background: var(--err); }
+.wp {
+  width: 65rpx;
+  text-align: right;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: var(--fg);
+}
+.wp.err { color: var(--err); }
+.zhu {
+  flex: none;
+  font-size: 21rpx;
+  color: var(--acc);
+  background: var(--accBg);
+  border-radius: 13rpx;
+  padding: 8rpx 19rpx;
+}
+
+/* 生词本 M2 占位:整卡置灰 */
+.card.dim {
+  opacity: 0.5;
+}
+.dim-body {
+  margin-top: 12rpx;
+  font-size: 23rpx;
+  color: var(--fg3);
+  line-height: 1.6;
+}
+
+.empty-hint {
+  margin-top: 16rpx;
+  font-size: 23rpx;
+  color: var(--fg3);
+}
+
+/* 新用户整页空态 */
+.empty {
+  padding: 180rpx 60rpx 0;
+  text-align: center;
+}
+.empty-ic {
+  font-size: 88rpx;
+}
+.empty-t {
+  margin-top: 24rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--fg);
+}
+.empty-s {
+  margin-top: 12rpx;
+  font-size: 25rpx;
+  color: var(--fg3);
+  line-height: 1.6;
+}
+.empty-btn {
+  margin: 48rpx auto 0;
+  width: 400rpx;
+  background: var(--acc);
+  color: #ffffff;
+  border-radius: 23rpx;
+  padding: 24rpx 0;
+  text-align: center;
+  font-size: 29rpx;
+  font-weight: 600;
+}

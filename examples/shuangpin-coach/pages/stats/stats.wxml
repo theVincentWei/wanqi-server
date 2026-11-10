@@ -1,0 +1,74 @@
+<view class="page {{theme === 'dark' ? 'dark' : ''}}">
+  <!-- seg:韵母/词语 M1 置灰占位(SPEC §6.6) -->
+  <view class="tabs seg">
+    <view class="seg-i on">总览</view>
+    <view class="seg-i off">韵母</view>
+    <view class="seg-i off">词语</view>
+  </view>
+
+  <block wx:if="{{hasData}}">
+    <!-- 三卡:累计字数 / 练习组数 / 连续天数(getOverview) -->
+    <view class="stat3">
+      <view class="sc">
+        <view class="sc-num">{{totalChars}}</view>
+        <view class="sc-label">累计字数</view>
+      </view>
+      <view class="sc">
+        <view class="sc-num">{{totalGroups}}</view>
+        <view class="sc-label">练习组数</view>
+      </view>
+      <view class="sc">
+        <view class="sc-num">{{streakText}}</view>
+        <view class="sc-label">连续打卡</view>
+      </view>
+    </view>
+
+    <!-- 近 14 天:图例 + linechart 双曲线 -->
+    <view class="card">
+      <view class="card-h">
+        <view class="card-title">近 14 天</view>
+        <view class="lg">
+          <view class="lg-i"><view class="ln l1"></view><text>正确率</text></view>
+          <view class="lg-i"><view class="ln l2"></view><text>速度(″/字)</text></view>
+        </view>
+      </view>
+      <view class="chart-wrap">
+        <linechart points="{{acc14}}" points2="{{sec14}}" labels="{{dates}}" theme="{{theme}}"/>
+      </view>
+    </view>
+
+    <!-- 薄弱韵母:前 6 条 + 专练入口 -->
+    <view class="card">
+      <view class="card-h">
+        <view class="card-title">薄弱韵母</view>
+        <view class="card-sub">按正确率升序 · 点「专练」直接开一组</view>
+      </view>
+      <view class="wrow" wx:for="{{weak}}" wx:key="fin">
+        <text class="wn">{{item.fin}}</text>
+        <view class="bar">
+          <view class="bar-i {{item.tone}}" style="width:{{item.barW}}"></view>
+        </view>
+        <text class="wp {{item.tone === 'err' ? 'err' : ''}}">{{item.accText}}</text>
+        <view class="zhu" data-fin="{{item.fin}}" bindtap="onDrill">专练</view>
+      </view>
+      <view wx:if="{{!weak.length}}" class="empty-hint">还没有韵母正确率数据，练几组就有了</view>
+    </view>
+
+    <!-- 生词本:M2 置灰占位 -->
+    <view class="card dim">
+      <view class="card-h">
+        <view class="card-title">生词本</view>
+        <view class="card-sub">错 ≥2 次自动收入 · M2</view>
+      </view>
+      <view class="dim-body">错 ≥2 次的词自动进生词本，M2 上线后可在这里一键专练</view>
+    </view>
+  </block>
+
+  <!-- 新用户空态 -->
+  <view wx:else class="empty">
+    <view class="empty-ic">📈</view>
+    <view class="empty-t">还没有练习记录</view>
+    <view class="empty-s">先去练一组，这里会长出你的正确率曲线</view>
+    <view class="empty-btn" bindtap="goPractice">先去练一组</view>
+  </view>
+</view>

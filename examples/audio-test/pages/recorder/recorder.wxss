@@ -1,0 +1,8 @@
+/* 录音页沿用全局样式 */
+.result-path {
+  max-width: 400rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 24rpx;
+}

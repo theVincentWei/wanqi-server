@@ -1,0 +1,12 @@
+{
+  "description": "three.js 3D 性能基准小游戏(蒙皮动画 + PBR 贴图)",
+  "compileType": "game",
+  "libVersion": "3.8.6",
+  "appid": "wx3d7b2f91c4a8e5d6",
+  "projectname": "Three 3D 基准",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "urlCheck": false
+  }
+}

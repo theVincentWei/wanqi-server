@@ -1,0 +1,80 @@
+/* kbboard · 键盘对齐铁律：字母行 44rpx 固定 + 标注区 45rpx 固定（3 行 × 15rpx），
+   顶部对齐（padding-top 起排、justify-content: flex-start），
+   禁止整体垂直居中——否则字母随标注行数上下漂移。 */
+.kb {
+  width: 100%;
+}
+
+.kb-row {
+  display: flex;
+  gap: 10rpx;
+  margin-top: 12rpx;
+}
+
+.kb-key {
+  flex: 1;
+  height: 100rpx;
+  box-sizing: border-box;
+  background: var(--panel2);
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 10rpx;
+}
+
+/* 字母行：固定 44rpx，字高不随标注变化 */
+.kb-letter {
+  height: 44rpx;
+  line-height: 44rpx;
+  font-size: 27rpx;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* 标注区：固定 45rpx（3 行 × 15rpx），顶部对齐，行数不足留白 */
+.kb-labels {
+  height: 45rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.kb-label {
+  height: 15rpx;
+  line-height: 15rpx;
+  font-size: 14rpx;
+  color: var(--fg3);
+}
+
+/* ⌫ 键：宽 1.5 格，无标注，单独垂直居中它的字形 */
+.kb-key.bksp {
+  flex: 1.5;
+}
+.kb-key.bksp .kb-letter {
+  line-height: 88rpx;
+  height: 88rpx;
+}
+
+/* 提示开：目标键发光（hotBg 底 + hot 键帽/标注） */
+.kb-key.hl {
+  background: var(--hotBg);
+  border-color: var(--hot);
+}
+.kb-key.hl .kb-letter {
+  color: var(--hot);
+}
+.kb-key.hl .kb-label {
+  color: var(--hot);
+}
+
+/* 提示关：标注小字淡显 */
+.kb.dim .kb-label {
+  opacity: 0.32;
+}
+
+.kb-key-hover {
+  opacity: 0.72;
+}

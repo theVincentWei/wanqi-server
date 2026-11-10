@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "pages/audio/audio",
+    "pages/recorder/recorder"
+  ],
+  "window": {
+    "navigationBarTitleText": "音频验收",
+    "navigationBarBackgroundColor": "#1f6feb",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f6f7f9"
+  }
+}

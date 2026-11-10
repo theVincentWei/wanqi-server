@@ -1,0 +1,11 @@
+{
+  "compileType": "miniprogram",
+  "appid": "wx7c3e9d2a1b4f5e68",
+  "projectname": "ledger",
+  "setting": {
+    "es6": true,
+    "postcss": true,
+    "minified": true
+  },
+  "libVersion": "3.3.3"
+}

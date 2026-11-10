@@ -1,0 +1,99 @@
+<view class="page {{theme === 'dark' ? 'dark' : ''}}">
+  <view class="live {{liveOk ? '' : 'err'}}">
+    <view class="dot"></view>
+    <text class="live-text">{{liveText}}</text>
+  </view>
+
+  <!-- 三圆环:CPU 蓝 / 内存橙 / 存储红 -->
+  <view class="rings">
+    <view class="ring-card">
+      <view class="ring-wrap">
+        <canvas type="2d" id="ring-cpu" class="ring-canvas"></canvas>
+        <view class="ring-pct">{{cpuPctText}}</view>
+      </view>
+      <view class="ring-label">CPU</view>
+      <view class="ring-sub">负载 {{load1}}</view>
+    </view>
+    <view class="ring-card">
+      <view class="ring-wrap">
+        <canvas type="2d" id="ring-mem" class="ring-canvas"></canvas>
+        <view class="ring-pct">{{memPctText}}</view>
+      </view>
+      <view class="ring-label">内存</view>
+      <view class="ring-sub">{{memShortLine}}</view>
+    </view>
+    <view class="ring-card">
+      <view class="ring-wrap">
+        <canvas type="2d" id="ring-disk" class="ring-canvas"></canvas>
+        <view class="ring-pct">{{diskPctText}}</view>
+      </view>
+      <view class="ring-label">存储</view>
+      <view class="ring-sub">{{diskAvailShort}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">处理器与负载</view>
+    <view class="row">
+      <text class="label">当前占用</text>
+      <text class="value">{{cpuNow}}<text class="soft" wx:if="{{cores}}">（用户 {{cpuUser}}% + 系统 {{cpuSys}}%）</text></text>
+    </view>
+    <view class="row"><text class="label">负载 · 1 分钟</text><text class="value">{{load1}}</text></view>
+    <view class="row"><text class="label">负载 · 5 分钟</text><text class="value">{{load5}}</text></view>
+    <view class="row">
+      <text class="label">负载 · 15 分钟</text>
+      <text class="value">{{load15}}<text wx:if="{{trendText}}" class="trend">{{trendText}}</text></text>
+    </view>
+    <view class="row"><text class="label">持续运行</text><text class="value">{{upText}}</text></view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">内存</view>
+    <view class="row"><text class="label">已用</text><text class="value">{{memUsed}}</text></view>
+    <view class="row"><text class="label">可用</text><text class="value">{{memAvail}}</text></view>
+    <view class="row"><text class="label">压缩内存</text><text class="value">{{memComp}}</text></view>
+    <view class="row"><text class="label">使用率</text><text class="value">{{memPctTextRow}}</text></view>
+    <view class="bar"><view class="fill mem" style="width:{{memPctVal}}%"></view></view>
+    <view class="warnbox" wx:if="{{warnMem}}">{{warnMem}}</view>
+  </view>
+
+  <!-- 占用 Top 10:内存/CPU 段钮换排序(默认内存),点行进详情 -->
+  <view class="card">
+    <view class="proc-head">
+      <view class="card-title ptitle">占用 · Top 10</view>
+      <view class="seg">
+        <view class="seg-btn {{procSort === 'mem' ? 'active' : ''}}" bindtap="onSortMem">内存</view>
+        <view class="seg-btn {{procSort === 'cpu' ? 'active' : ''}}" bindtap="onSortCpu">CPU</view>
+      </view>
+    </view>
+    <view class="proc-sub">进程(当前按{{procSort === 'mem' ? '内存' : 'CPU'}}排序)· 点行看详情</view>
+    <view wx:if="{{procState === 'loading'}}" class="proc-empty">正在获取进程榜…</view>
+    <view wx:elif="{{procState === 'empty'}}" class="proc-empty">暂无进程数据</view>
+    <block wx:else>
+      <view
+        class="proc-row {{item.top3 ? 'top3' : ''}}"
+        wx:for="{{procRows}}"
+        wx:key="pid"
+        bindtap="openDetail"
+        data-pid="{{item.pid}}"
+      >
+        <view class="proc-rank">{{item.rank}}</view>
+        <text class="proc-name">{{item.name}}</text>
+        <text class="proc-cpu">{{item.cpuText}}</text>
+        <text class="proc-mem">{{item.memText}}</text>
+      </view>
+    </block>
+  </view>
+
+  <view class="card">
+    <view class="card-title">存储 · 数据卷</view>
+    <view class="disk-head">
+      <text class="used-avail">{{diskLine}}</text>
+      <text class="pct">{{diskPctTextHead}}</text>
+    </view>
+    <view class="bar"><view class="fill disk" style="width:{{diskPctVal}}%"></view></view>
+    <view class="warnbox" wx:if="{{warnDisk}}">{{warnDisk}}</view>
+  </view>
+
+  <view class="hint">打开即自动刷新 · 后台每 5 分钟记一笔历史</view>
+</view>

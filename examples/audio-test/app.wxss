@@ -1,0 +1,116 @@
+page {
+  background: #f6f7f9;
+  font-size: 28rpx;
+  color: #24292f;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin: 24rpx;
+}
+
+.card-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  margin-bottom: 20rpx;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.btn {
+  flex: 1 1 30%;
+  background: #1f6feb;
+  color: #ffffff;
+  border-radius: 12rpx;
+  padding: 18rpx 0;
+  text-align: center;
+  font-size: 28rpx;
+}
+
+.btn.secondary {
+  background: #57606a;
+}
+
+.btn.danger {
+  background: #cf222e;
+}
+
+.btn.disabled {
+  opacity: 0.45;
+}
+
+.status-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 8rpx 0;
+  color: #57606a;
+}
+
+.status-line .value {
+  color: #24292f;
+  font-weight: 600;
+}
+
+.log-panel {
+  background: #0d1117;
+  color: #7ee787;
+  border-radius: 12rpx;
+  padding: 16rpx;
+  max-height: 480rpx;
+  overflow: hidden;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.log-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-item.error {
+  color: #ff7b72;
+  font-weight: 600;
+}
+
+.log-item.info {
+  color: #79c0ff;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12rpx 0;
+}
+
+.row-label {
+  color: #57606a;
+}
+
+.rate-row {
+  display: flex;
+  gap: 12rpx;
+}
+
+.rate-chip {
+  flex: 1;
+  text-align: center;
+  padding: 10rpx 0;
+  border-radius: 10rpx;
+  background: #eaeef2;
+  color: #57606a;
+  font-size: 26rpx;
+}
+
+.rate-chip.active {
+  background: #1f6feb;
+  color: #ffffff;
+  font-weight: 600;
+}

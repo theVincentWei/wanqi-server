@@ -1,0 +1,25 @@
+<view class="page {{theme === 'dark' ? 'dark' : ''}}">
+  <view class="card">
+    <view class="legend">
+      <view class="sw"><view class="ln blue"></view><text>CPU</text></view>
+      <view class="sw"><view class="ln orange"></view><text>内存</text></view>
+      <view class="sw"><view class="ln red"></view><text>存储</text></view>
+    </view>
+    <view wx:if="{{hasPoints}}">
+      <canvas type="2d" id="chart" class="chart-canvas"></canvas>
+      <view class="xticks" wx:if="{{xticks.length}}">
+        <text class="xtick" wx:for="{{xticks}}" wx:key="*this">{{item}}</text>
+      </view>
+    </view>
+    <view wx:else class="chart-empty">暂无历史数据,稍后再来看看</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">今日摘要</view>
+    <view class="row"><text class="label">CPU 平均 / 峰值</text><text class="value">{{sumCpu}}</text></view>
+    <view class="row"><text class="label">内存 平均 / 峰值</text><text class="value">{{sumMem}}</text></view>
+    <view class="row"><text class="label">存储 当前 / 涨幅</text><text class="value">{{sumDisk}}</text></view>
+  </view>
+
+  <view class="hint">历史曲线每 5 分钟记一笔 · 打开页面即加载</view>
+</view>

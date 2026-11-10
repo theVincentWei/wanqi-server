@@ -1,0 +1,9 @@
+{
+  "pages": ["pages/list/list", "pages/add/add"],
+  "window": {
+    "navigationBarBackgroundColor": "#0a7d54",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "记账本",
+    "backgroundColor": "#f6f7f9"
+  }
+}

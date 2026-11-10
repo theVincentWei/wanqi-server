@@ -1,0 +1,7 @@
+{
+  "compileType": "miniprogram",
+  "appid": "wx2f8a4c6e1d3b5a79",
+  "projectname": "glm-quota",
+  "setting": { "es6": true, "postcss": true, "minified": true },
+  "libVersion": "3.3.3"
+}

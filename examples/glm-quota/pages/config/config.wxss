@@ -1,0 +1,24 @@
+.page { padding: 24rpx; }
+.card { background: #1d1f27; border-radius: 16rpx; padding: 28rpx 24rpx; margin-bottom: 22rpx; }
+.label { font-size: 24rpx; color: #9aa1a9; margin-bottom: 12rpx; }
+.key-input {
+  font-size: 28rpx; color: #e8eaed; background: #262a33;
+  border: 1px solid #333a44; border-radius: 14rpx; padding: 20rpx 18rpx;
+}
+.btnrow { display: flex; gap: 16rpx; margin-top: 22rpx; }
+.save {
+  flex: 1; background: #2f6feb; color: #fff; text-align: center;
+  font-size: 29rpx; font-weight: 600; padding: 19rpx 0; border-radius: 13rpx;
+}
+.clear {
+  width: 170rpx; background: #262a33; color: #f2a5a8; text-align: center;
+  font-size: 29rpx; padding: 19rpx 0; border-radius: 13rpx;
+}
+.ok { font-size: 24rpx; color: #6fd28c; margin-top: 18rpx; }
+
+.switchrow { display: flex; justify-content: space-between; align-items: center; }
+.switchrow .col { display: flex; flex-direction: column; }
+.switchrow .t { font-size: 29rpx; color: #e8eaed; }
+.switchrow .s { font-size: 22rpx; color: #6d737b; margin-top: 6rpx; }
+
+.desc { font-size: 24rpx; color: #9aa1a9; line-height: 1.6; }

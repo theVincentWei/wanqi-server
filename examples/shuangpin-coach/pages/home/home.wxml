@@ -1,0 +1,87 @@
+<view class="page {{theme==='dark'?'dark':''}}">
+
+  <view class="appbar">
+    <view class="ttl">双拼教练</view>
+    <view class="sub">{{subText}}</view>
+  </view>
+
+  <view class="seg seg2">
+    <view class="seg-i on">单字</view>
+    <view class="seg-i dis" bindtap="tapWordSeg">词语</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title title-row">
+      <text>要练的韵母</text>
+      <view class="lnks">
+        <text class="lnk" bindtap="selectAll">全选</text>
+        <text class="lnk-dot">·</text>
+        <text class="lnk" bindtap="clearAll">清空</text>
+      </view>
+    </view>
+    <view class="qrow">
+      <text class="qbtn" bindtap="pickRecommended">推荐 易→难</text>
+      <text class="qbtn qbtn-w {{weakN ? '' : 'qbtn-dis'}}" bindtap="pickWeak">我的薄弱 {{weakN || 0}}</text>
+    </view>
+    <view class="chips">
+      <text
+        wx:for="{{finList}}"
+        wx:key="fin"
+        class="chip {{item.on ? 'on' : ''}}"
+        data-fin="{{item.fin}}"
+        bindtap="toggleFin"
+      >{{item.fin}}</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">出题模式</view>
+    <view class="opt {{mode==='look' ? 'on' : ''}}" data-v="look" bindtap="setMode">
+      <view class="radio"></view>
+      <text class="ic">👀</text>
+      <view class="opt-main">
+        <view class="opt-b">看拼打字</view>
+        <view class="opt-s">显示拼音 → 你打出双拼键序</view>
+      </view>
+      <text class="tag">推荐</text>
+    </view>
+    <view class="opt {{mode==='listen' ? 'on' : ''}}" data-v="listen" bindtap="setMode">
+      <view class="radio"></view>
+      <text class="ic">🔊</text>
+      <view class="opt-main">
+        <view class="opt-b">听音打字</view>
+        <view class="opt-s">播放字音 → 听写键序，进题自动播 · 重听不限次</view>
+        <view class="opt-s warn" wx:if="{{mode==='listen' && !natAudio}}">此版 App 暂不支持离线音频 · 需连主机</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">输入与提示</view>
+    <view class="lrow">
+      <text class="lrow-l">输入方式</text>
+      <view class="seg seg-auto">
+        <view class="seg-i {{input==='builtin'?'on':''}}" data-v="builtin" bindtap="setInput">内置键盘</view>
+        <view class="seg-i {{input==='system'?'on':''}}" data-v="system" bindtap="setInput">系统键盘</view>
+      </view>
+    </view>
+    <view class="lrow">
+      <text class="lrow-l">键位提示（默认关 · 练习中可随时开）</text>
+      <view class="lrow-r">
+        <text class="swt">{{hint ? '开' : '关'}}</text>
+        <view class="sw {{hint ? 'on' : ''}}" data-v="{{hint ? 'off' : 'on'}}" bindtap="setHint"><view class="sw-i"></view></view>
+      </view>
+    </view>
+    <view class="lrow">
+      <text class="lrow-l">本次题量</text>
+      <view class="seg seg-auto">
+        <view class="seg-i {{count===10?'on':''}}" data-v="10" bindtap="setCount">10 题</view>
+        <view class="seg-i {{count===20?'on':''}}" data-v="20" bindtap="setCount">20 题</view>
+        <view class="seg-i {{count===30?'on':''}}" data-v="30" bindtap="setCount">30 题</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="cta" bindtap="onStart">开始练习 →</view>
+  <view class="cta-space"></view>
+</view>

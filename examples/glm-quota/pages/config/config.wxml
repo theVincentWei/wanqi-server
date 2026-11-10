@@ -1,0 +1,26 @@
+<view class="page">
+  <view class="card">
+    <view class="label">GLM coding key(仅存本机)</view>
+    <input class="key-input" password placeholder="粘贴 GLM coding key" value="{{keyInput}}" bindinput="onKeyInput" />
+    <view class="btnrow">
+      <view class="save" bindtap="saveKey">保存</view>
+      <view class="clear" wx:if="{{hasKey}}" bindtap="clearKey">清除</view>
+    </view>
+    <view class="ok" wx:if="{{hasKey}}">已配置 ✓</view>
+  </view>
+
+  <view class="card">
+    <view class="switchrow">
+      <view class="col">
+        <text class="t">自动刷新</text>
+        <text class="s">用量/记录页每 60 秒静默更新</text>
+      </view>
+      <switch checked="{{auto}}" bindchange="onAutoChange" color="#2f6feb" />
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="label">数据来源</view>
+    <text class="desc">直连 bigmodel 监控接口(quota/limit、token-usage/activity、模型目录),无中间服务;key 只保存在本机小程序沙盒,不经过任何第三方。</text>
+  </view>
+</view>

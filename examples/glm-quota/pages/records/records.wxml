@@ -1,0 +1,62 @@
+<view class="page">
+  <view class="nokey" wx:if="{{!hasKey && !loading}}" bindtap="goConfig">
+    <view class="nokey-t">未配置 Key</view>
+    <view class="nokey-s">去「配置」粘贴 GLM coding key,即可查看使用记录 ›</view>
+  </view>
+
+  <view class="err" wx:if="{{error}}">{{error}}</view>
+
+  <block wx:if="{{hasKey}}">
+    <view class="seg">
+      <view class="{{period === 'day' ? 'on' : ''}}" data-period="day" bindtap="onSeg">当日</view>
+      <view class="{{period === 'week' ? 'on' : ''}}" data-period="week" bindtap="onSeg">近7日</view>
+      <view class="{{period === 'month' ? 'on' : ''}}" data-period="month" bindtap="onSeg">近30日</view>
+    </view>
+
+    <view class="grid2">
+      <view class="stat" wx:for="{{cards}}" wx:key="l">
+        <text class="sv {{item.blue ? 'blue' : ''}}">{{item.v}}</text>
+        <text class="sl">{{item.l}}<text class="delta" wx:if="{{item.delta}}">{{item.delta}}</text></text>
+      </view>
+    </view>
+
+    <view class="card" wx:if="{{chart.items.length}}">
+      <view class="rowb">
+        <text class="ct">每日 Tokens</text>
+        <text class="badge">{{period === 'week' ? '近 7 天' : '近 30 天'}}</text>
+      </view>
+      <view class="chart">
+        <view class="col" wx:for="{{chart.items}}" wx:key="date">
+          <text class="vl" wx:if="{{chart.showLabels}}">{{item.v}}</text>
+          <view class="bv {{item.peak ? 'peak' : ''}}" style="height:{{item.h}}%"></view>
+        </view>
+      </view>
+      <view class="xrow">
+        <text class="xl" wx:for="{{chart.labels}}" wx:key="k">{{item.t}}</text>
+      </view>
+    </view>
+
+    <view class="card" wx:if="{{window5h}}">
+      <view class="rowb">
+        <text class="ct">今日 5h 窗口</text>
+        <text class="badge">{{window5h.pctText}}</text>
+      </view>
+      <view class="bar"><view class="fill" style="width:{{window5h.pct}}%"></view></view>
+      <view class="sub">重置于 {{window5h.resetText}}<text wx:if="{{window5h.toolsText}}"> · {{window5h.toolsText}}</text></view>
+    </view>
+
+    <view class="card">
+      <view class="rowb">
+        <text class="ct dim">Cache 命中率 / 低峰占比 / 按模型拆分</text>
+        <text class="tag">🔒 待接入</text>
+      </view>
+      <view class="desc">这几个指标在 usage-detail 接口里,需要「组织 ID」授权头,key 拿不到;拿到 org id 后即补上。</view>
+    </view>
+
+    <view class="updated">{{updatedAtText}}</view>
+  </block>
+
+  <view class="hint" wx:if="{{hasKey && !cards.length && !loading && !error}}">
+    没拿到数据,稍后会自动重试。
+  </view>
+</view>

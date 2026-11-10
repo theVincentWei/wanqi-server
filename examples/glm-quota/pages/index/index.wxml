@@ -1,0 +1,67 @@
+<view class="page">
+  <view class="nokey" wx:if="{{!hasKey && !loading}}" bindtap="goConfig">
+    <view class="nokey-t">未配置 Key</view>
+    <view class="nokey-s">去「配置」粘贴 GLM coding key,即可查看用量 ›</view>
+  </view>
+
+  <view class="err" wx:if="{{error}}">{{error}}</view>
+
+  <block wx:if="{{tokens || tools}}">
+    <view class="hero" wx:if="{{tokens}}">
+      <view class="row-between">
+        <text class="card-title">{{tokens.title}}</text>
+        <view class="row-between">
+          <text class="badge lv" wx:if="{{levelText}}">{{levelText}}</text>
+          <text class="badge">{{tokens.windowText}}</text>
+        </view>
+      </view>
+      <view class="hero-pct {{tokens.hot}}">{{tokens.pctText}}</view>
+      <view class="bar big"><view class="fill {{tokens.hot}}" style="width:{{tokens.pct}}%"></view></view>
+      <view class="row-between">
+        <text class="sub">{{tokens.cdText}}</text>
+        <text class="sub dim">重置于 {{tokens.resetText}}</text>
+      </view>
+    </view>
+
+    <view class="card" wx:if="{{tools}}">
+      <view class="row-between">
+        <text class="card-title">{{tools.title}}</text>
+        <text class="badge">{{tools.windowText}}</text>
+      </view>
+      <view class="nums" wx:if="{{tools.hasNums}}">
+        <view class="num"><text class="nv">{{tools.used}}</text><text class="nl">已用</text></view>
+        <view class="num"><text class="nv hi">{{tools.remaining}}</text><text class="nl">剩余</text></view>
+        <view class="num"><text class="nv">{{tools.total}}</text><text class="nl">总量</text></view>
+      </view>
+      <view class="bar big"><view class="fill {{tools.hot}}" style="width:{{tools.pct}}%"></view></view>
+      <view class="row-between">
+        <text class="sub dim">已用 {{tools.pctText}}</text>
+        <text class="sub dim">{{tools.cdText}}</text>
+      </view>
+      <block wx:if="{{tools.details.length}}">
+        <view class="divider"></view>
+        <view class="detail" wx:for="{{tools.details}}" wx:key="code">
+          <text class="dcode">{{item.code}}</text>
+          <view class="dshare"><view class="dfill" style="width:{{item.sharePct}}%"></view></view>
+          <text class="dnum">{{item.usage}} 次</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="card" wx:if="{{models.length}}">
+      <view class="row-between">
+        <text class="card-title">模型目录</text>
+        <text class="badge">{{modelsNote}}</text>
+      </view>
+      <view class="chips">
+        <text class="chip" wx:for="{{models}}" wx:key="id">{{item.id}}</text>
+      </view>
+    </view>
+
+    <view class="updated">{{updatedAtText}}</view>
+  </block>
+
+  <view class="hint" wx:if="{{hasKey && !tokens && !tools && !loading && !error}}">
+    没拿到数据,稍后会自动重试。
+  </view>
+</view>

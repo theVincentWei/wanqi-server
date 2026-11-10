@@ -1,0 +1,56 @@
+<view class="page {{theme==='dark'?'dark':''}}">
+
+  <view class="rhead">第 {{ord}} 组完成 🎉<view class="rsub">{{rsub}}</view></view>
+
+  <view class="card score">
+    <view class="ringwrap">
+      <view class="ring" style="background: conic-gradient(var(--ok) {{accPct}}%, var(--track) 0)"></view>
+      <view class="ring-hole"></view>
+      <view class="ring-center">
+        <view class="ringnum">{{accPct}}%</view>
+        <view class="ringlbl">正确率</view>
+      </view>
+    </view>
+    <view class="slist">
+      <view class="srow"><text>用时</text><text class="sv">{{durText}}</text></view>
+      <view class="srow"><text>均速</text><text class="sv">{{avgText}}</text></view>
+      <view class="srow"><text>最快</text><text class="sv">{{fastText}}</text></view>
+      <view class="srow"><text>错题</text><text class="sv {{wrongCount ? 'errc' : ''}}">{{wrongCount}}</text></view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title title-row">
+      <text>近 10 组正确率</text>
+      <text class="lnk" wx:if="{{trendLnk}}">{{trendLnk}}</text>
+    </view>
+    <view class="trendbox">
+      <linechart points="{{points}}" labels="{{labels}}" theme="{{theme}}" mini="{{true}}" />
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title title-row">
+      <text>错题</text>
+      <text class="lnk">自动进生词本（M2）</text>
+    </view>
+    <view class="miss" wx:for="{{wrongs}}" wx:key="idx">
+      <text class="mz">{{item.char}}</text>
+      <view class="mm">
+        <view class="mm-b">{{item.py}} · 应为 {{item.keysUp}}</view>
+        <view class="mm-s" wx:if="{{item.keyPart}}">
+          <text>你打 </text><text class="strike">{{item.typedUp}}</text>
+          <text> ← {{item.tail}} 应打 </text><text class="hk">{{item.keyPart}}</text>
+        </view>
+        <view class="mm-s" wx:else><text>你打「{{item.typedUp}}」</text></view>
+      </view>
+    </view>
+    <view class="miss-empty" wx:if="{{!wrongs.length}}">全对，没有错题 🎉</view>
+  </view>
+
+  <view class="rbt">
+    <view class="bpri {{canRetry ? '' : 'dis'}}" bindtap="onRetry">再来一组</view>
+    <view class="bgho" bindtap="onStats">查看统计</view>
+  </view>
+  <view class="rbt-space"></view>
+</view>

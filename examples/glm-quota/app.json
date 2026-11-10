@@ -1,0 +1,35 @@
+{
+  "pages": ["pages/index/index", "pages/records/records", "pages/config/config"],
+  "window": {
+    "navigationBarBackgroundColor": "#1d1f27",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "GLM 用量",
+    "backgroundColor": "#141519"
+  },
+  "tabBar": {
+    "color": "#6d737b",
+    "selectedColor": "#7cb8ff",
+    "borderStyle": "black",
+    "backgroundColor": "#1d1f27",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "用量",
+        "iconPath": "assets/tab/usage.png",
+        "selectedIconPath": "assets/tab/usage-active.png"
+      },
+      {
+        "pagePath": "pages/records/records",
+        "text": "记录",
+        "iconPath": "assets/tab/records.png",
+        "selectedIconPath": "assets/tab/records-active.png"
+      },
+      {
+        "pagePath": "pages/config/config",
+        "text": "配置",
+        "iconPath": "assets/tab/config.png",
+        "selectedIconPath": "assets/tab/config-active.png"
+      }
+    ]
+  }
+}

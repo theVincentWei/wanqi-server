@@ -1,0 +1,19 @@
+<view class="kb {{dim ? 'dim' : ''}}">
+  <view class="kb-row" wx:for="{{rows}}" wx:key="name" wx:for-item="row">
+    <view
+      wx:for="{{row.keys}}"
+      wx:for-item="key"
+      wx:key="k"
+      class="kb-key {{hlMap[key.k] ? 'hl' : ''}} {{key.k === 'del' ? 'bksp' : ''}}"
+      data-key="{{key.k}}"
+      bindtap="onTap"
+      hover-class="kb-key-hover"
+      hover-stay-time="60"
+    >
+      <text class="kb-letter">{{key.up}}</text>
+      <view class="kb-labels" wx:if="{{key.labels.length}}">
+        <text class="kb-label" wx:for="{{key.labels}}" wx:for-item="lb" wx:key="*this">{{lb}}</text>
+      </view>
+    </view>
+  </view>
+</view>
