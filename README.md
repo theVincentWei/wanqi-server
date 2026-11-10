@@ -76,10 +76,33 @@ wanqi/
 
 appId / 版本对照与 backend 细节见 [docs/pack-and-install.md §6](docs/pack-and-install.md)。
 
+## 通知系统(订阅 → 轮询 → 本地通知)
+
+小程序通知走微信兼容路线:**小程序前端只申请订阅,服务端才有发送权**,通知统一收集到宿主通知中心:
+
+```
+小程序 JS ──wx.requestSubscribeMessage──▶ 容器 API 面 ──宿主订阅面板──▶ 用户 accept/reject
+     │ (一次性配额 +1 记账)                        ▲ 容器侧补丁见 patches/dimina-notify/
+     ▼
+小程序后端 ──POST /notify(微信同形请求体)──▶ 万器 server(九步发送判定/配额/限流/去重)
+                                                  │
+手机端轮询 GET /notices ◀──通知中心(未读/已读/点击跳回小程序页)──┘
+```
+
+- **发送协议与微信 `subscribe/send` 同形**:`template_id`/`page`/`data` 生效,`touser`/`lang` 空转兼容,
+  `errcode` 沿用微信值(40001/40002/40003/43101/45009/47003)——迁入代码按 `errcode` 分支即可。
+- **v1 无服务端推送**:手机端拉取(`GET /notices`)+ 本地通知投递;服务端按契约预留
+  `PushDispatcher` 抽象与 config `push` 段,未来接 APNs/安卓厂商通道时平台侧接入、小程序代码零改动。
+- 容器(Dimina)侧所需改动已物化为公开补丁:`patches/dimina-notify/`;宿主(手机壳)侧闭源,对接说明同目录 README。
+
+完整契约(三层分工、字段三态表 ✅/🔇/↔、九步发送判定、错误码、实现偏差登记):
+[docs/notify-contract.md](docs/notify-contract.md)。
+
 ## 文档
 
 - **打包与安装手册(作者视角)**:[docs/pack-and-install.md](docs/pack-and-install.md)
 - **Bundle 规范 v1(定稿)**:[docs/design-bundle-spec.md](docs/design-bundle-spec.md)
+- **通知系统契约 v1(镜像)**:[docs/notify-contract.md](docs/notify-contract.md) · 容器侧补丁:[patches/dimina-notify/](patches/dimina-notify/README.md)
 - 迁移端到端验证:`scripts/verify-migration.sh`(对测试 server 逐包 install + 断言)
 
 ## 状态
