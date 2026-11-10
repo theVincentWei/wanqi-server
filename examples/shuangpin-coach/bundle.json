@@ -1,0 +1,12 @@
+{
+  "spec": 1,
+  "appId": "wx3d8b6f2a9c4e7d15",
+  "name": "双拼教练",
+  "version": {
+    "code": 20,
+    "name": "1.4.4"
+  },
+  "frontend": {
+    "entry": "pages/home/home"
+  }
+}
