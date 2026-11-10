@@ -55,7 +55,7 @@ Future<void> main(List<String> args) async {
   final int restored = await provisioner.restoreAll();
   if (restored > 0) stdout.writeln('provisioner: restored $restored backend(s)');
 
-  final shelf.Handler handler = shelf.Cascade(statusCodes: <int>[404])
+  final shelf.Handler cascade = shelf.Cascade(statusCodes: <int>[404])
       .add(market.router.call)
       .add(bundle.router.call)
       .add(gateway.adminRouter.call)
@@ -74,6 +74,24 @@ Future<void> main(List<String> args) async {
     }
     return shelf.Response.notFound('not found');
   }).handler;
+
+  // Handler exceptions and 5xx answers land in the server log (launchd
+  // stdout) — a silent 500 was exactly what made the migration burst
+  // undiagnosable.
+  final shelf.Handler handler = (shelf.Request request) async {
+    try {
+      final shelf.Response response = await cascade(request);
+      if (response.statusCode >= 500) {
+        stdout.writeln(
+            'server: ${response.statusCode} ${request.method} /${request.url.path}');
+      }
+      return response;
+    } catch (error, stack) {
+      stdout.writeln(
+          'server: CRASH ${request.method} /${request.url.path}: $error\n$stack');
+      rethrow;
+    }
+  };
 
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, cfg.port);
   stdout.writeln('AppHub listening on :${server.port}');

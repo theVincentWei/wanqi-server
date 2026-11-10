@@ -61,45 +61,53 @@ abstract class WanqiApi {
 }
 
 class HttpWanqiApi implements WanqiApi {
-  final http.Client _client = http.Client();
+  /// One-shot clients, closed after every call. A long-lived client holds a
+  /// keep-alive socket whose HttpClient.idleTimeout (15s) would otherwise
+  /// keep the event loop alive after main() returns — every CLI invocation
+  /// appeared to take ~15s while the actual work took milliseconds.
+  Future<ApiResult> _run(Future<http.Response> Function(http.Client) action) async {
+    final http.Client client = http.Client();
+    try {
+      final http.Response response = await action(client);
+      return ApiResult(response.statusCode, response.body);
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
+  Future<ApiResult> install(String server, String key, List<int> zipBytes) {
+    return _run((client) => client.post(
+          Uri.parse('$server/api/v1/bundle/install'),
+          headers: <String, String>{
+            ..._headers(key),
+            'content-type': 'application/zip',
+          },
+          body: zipBytes,
+        ));
+  }
+
+  @override
+  Future<ApiResult> rollback(String server, String key, String appId) {
+    return _run((client) => client.post(
+        Uri.parse('$server/api/v1/bundle/$appId/rollback'), headers: _headers(key)));
+  }
+
+  @override
+  Future<ApiResult> remove(String server, String key, String appId) {
+    return _run((client) => client
+        .delete(Uri.parse('$server/api/v1/bundle/$appId'), headers: _headers(key)));
+  }
+
+  @override
+  Future<ApiResult> list(String server, String key) {
+    return _run((client) =>
+        client.get(Uri.parse('$server/api/v1/apps'), headers: _headers(key)));
+  }
 
   Map<String, String> _headers(String key) => <String, String>{
         if (key.isNotEmpty) 'authorization': 'Bearer $key',
       };
-
-  @override
-  Future<ApiResult> install(String server, String key, List<int> zipBytes) async {
-    final http.Response response = await _client.post(
-      Uri.parse('$server/api/v1/bundle/install'),
-      headers: <String, String>{
-        ..._headers(key),
-        'content-type': 'application/zip',
-      },
-      body: zipBytes,
-    );
-    return ApiResult(response.statusCode, response.body);
-  }
-
-  @override
-  Future<ApiResult> rollback(String server, String key, String appId) async {
-    final http.Response response = await _client
-        .post(Uri.parse('$server/api/v1/bundle/$appId/rollback'), headers: _headers(key));
-    return ApiResult(response.statusCode, response.body);
-  }
-
-  @override
-  Future<ApiResult> remove(String server, String key, String appId) async {
-    final http.Response response =
-        await _client.delete(Uri.parse('$server/api/v1/bundle/$appId'), headers: _headers(key));
-    return ApiResult(response.statusCode, response.body);
-  }
-
-  @override
-  Future<ApiResult> list(String server, String key) async {
-    final http.Response response =
-        await _client.get(Uri.parse('$server/api/v1/apps'), headers: _headers(key));
-    return ApiResult(response.statusCode, response.body);
-  }
 }
 
 class WanqiCli {

@@ -16,6 +16,18 @@ class Db {
   final ConnectionSettings _settings;
   MySqlConnection? _conn;
 
+  /// mysql1's single MySqlConnection must never see interleaved queries —
+  /// shelf handlers interleave at await points (CLI bursts, spawn timers,
+  /// health probes), and protocol interleaving corrupts both sides. Every
+  /// access is serialized through one promise chain.
+  Future<void> _tail = Future<void>.value();
+
+  Future<T> _serialized<T>(Future<T> Function() action) {
+    final Future<T> run = _tail.then((_) => action());
+    _tail = run.then<void>((_) {}, onError: (Object _) {});
+    return run;
+  }
+
   Future<void> connect() async {
     _conn = await MySqlConnection.connect(_settings);
   }
@@ -24,6 +36,18 @@ class Db {
     final MySqlConnection? conn = _conn;
     if (conn == null) throw StateError('db not connected');
     return conn;
+  }
+
+  Future<void> _ensure() async {
+    if (_conn == null) await connect();
+  }
+
+  Future<void> _reconnect() async {
+    try {
+      await _conn?.close();
+    } catch (_) {}
+    _conn = null;
+    await connect();
   }
 
   /// Closes the connection (graceful shutdown, tests).
@@ -46,8 +70,31 @@ class Db {
   /// Runs the query, returning rows as string-keyed maps with JSON-safe
   /// values (see [_normalize]). mysql1 0.22's query() substitutes [values]
   /// as literals (text protocol), so numeric columns arrive as strings —
-  /// [Store] normalises the numeric ones at its boundary.
-  Future<List<Map<String, Object?>>> q(String sql, [List<Object?>? values]) async {
+  /// [Store] normalises the numeric ones at its boundary. A stale/broken
+  /// connection reconnects once and the read is retried.
+  Future<List<Map<String, Object?>>> q(String sql, [List<Object?>? values]) =>
+      _serialized(() async {
+        await _ensure();
+        try {
+          return await _q(sql, values);
+        } catch (_) {
+          await _reconnect();
+          return _q(sql, values);
+        }
+      });
+
+  Future<void> exec(String sql, [List<Object?>? values]) =>
+      _serialized(() async {
+        await _ensure();
+        try {
+          await _c.query(sql, values);
+        } catch (_) {
+          await _reconnect();
+          await _c.query(sql, values);
+        }
+      });
+
+  Future<List<Map<String, Object?>>> _q(String sql, List<Object?>? values) async {
     final Result result = await _c.query(sql, values);
     return <Map<String, Object?>>[
       for (final ResultRow row in result)
@@ -56,10 +103,6 @@ class Db {
             entry.key: _normalize(entry.value),
         },
     ];
-  }
-
-  Future<void> exec(String sql, [List<Object?>? values]) async {
-    await _c.query(sql, values);
   }
 
   Future<void> initSchema() async {
