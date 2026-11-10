@@ -1,0 +1,87 @@
+# 万器(wanqi)
+
+**前后端一体的可交换小程序 Bundle 平台。** 装一个 Bundle,前后端全通,零手工。
+
+- 前端 = 手机容器里的小程序(Dimina,微信小程序语法),跑 DMCC 编译产物;
+- 后端 = 主机上的服务进程(Node),由 server 托管:动态端口、健康探测、崩溃看护、网关路由全自动;
+- 一个 Bundle 一个 zip、一个版本号,装 / 升 / 回滚 / 卸载四条命令走天下。
+
+## Bundle 是什么
+
+```
+<appId>-<versionCode>.zip
+├── bundle.json        # 应用清单(必选;缺 → 拒收)
+├── main/              # 前端:DMCC 编译产物(必选)
+└── backend/           # 后端(可选):产物 + 依赖随包(node_modules)
+```
+
+`bundle.json` 声明身份(`appId`)、版本(`version.code` 严格递增)、启动页(`frontend.entry`)与后端形态(`backend.start/health/gateway`)。字段语义详见 [docs/pack-and-install.md](docs/pack-and-install.md),格式规范详见 [docs/design-bundle-spec.md](docs/design-bundle-spec.md)。
+
+## 30 秒快速开始
+
+```bash
+git clone <this-repo> && cd wanqi
+
+# 1. 起服务端(默认 :7610;测试建议 :7620)
+cd server && dart pub get
+dart run bin/apphub.dart
+
+# 2. 装一个示例 Bundle(仓库自带 12 个)
+dart run bin/wanqi.dart bundle install ../examples/dist/wx5b8e2f4a9c1d7e60-10.zip
+
+# 3. 打开市场 / 拉应用列表
+curl -s http://127.0.0.1:7620/api/v1/apps | head
+```
+
+带后端的示例(sys-monitor)会自动:解包 `backend/` → 动态端口拉起 → 打 `/healthz` 到 200 → 按网关前缀注册路由;server 重启后自动重拉。四命令(均不碰 `data/logs/DB`):
+
+```bash
+wanqi bundle install <zip>     # 装
+wanqi bundle upgrade <zip>     # 升(失败自动退回上一版)
+wanqi bundle rollback <appId>  # 回滚到 previous
+wanqi bundle remove <appId>    # 卸(data/logs/DB 保留,重装即恢复)
+```
+
+## 目录结构
+
+```
+wanqi/
+├── server/             # Dart shelf 服务端(自 dsh-Go/apphub 移植)
+│   ├── bin/            # apphub.dart(server)· wanqi.dart(Bundle CLI)
+│   ├── lib/            # market/gateway/ai_gateway/store/obs …
+│   ├── third_party/    # vendor 依赖(dsh_client)
+│   └── tool/           # 配置示例(apphub.config.example.json)
+├── examples/           # 12 个示例小程序(源码形态,开源示例)
+│   ├── <pkg>/          # 源码 + bundle.json(sys-monitor 另含 daemon/ 后端源码)
+│   └── dist/           # 12 个发布 zip(<appId>-<code>.zip),main/ 在根 + 清单
+└── docs/               # 打包安装手册 · Bundle 规范 v1
+```
+
+## 示例一览
+
+| 目录 | 名称 | 后端 |
+|---|---|---|
+| examples/flappy-bird | Flappy Bird | – |
+| examples/glm-quota | GLM用量 | – |
+| examples/three-bench | Three 3D 基准 | – |
+| examples/webbench-3d-webview | WebView 3D 基线 | – |
+| examples/weui | WeUI for 小程序 | – |
+| examples/shuangpin-coach | 双拼教练 | – |
+| examples/star-drift | 星际穿行 | – |
+| examples/darkmode-demo | 深色模式演示 | – |
+| examples/sys-monitor | 系统监视器 | ✓(daemon,零运行时依赖) |
+| examples/ledger | 记账本 | – |
+| examples/road-hop | 过马路 | – |
+| examples/audio-test | 音频验收 | – |
+
+appId / 版本对照与 backend 细节见 [docs/pack-and-install.md §6](docs/pack-and-install.md)。
+
+## 文档
+
+- **打包与安装手册(作者视角)**:[docs/pack-and-install.md](docs/pack-and-install.md)
+- **Bundle 规范 v1(定稿)**:[docs/design-bundle-spec.md](docs/design-bundle-spec.md)
+- 迁移端到端验证:`scripts/verify-migration.sh`(对测试 server 逐包 install + 断言)
+
+## 状态
+
+Bundle v1(最小实现):清单门禁 + `bundle install/upgrade/rollback/remove` + 路由自动注册 + 后端置备托管。演进路线(DB migrations、分片分发、多机交换等)见规范 §7。
