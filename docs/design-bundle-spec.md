@@ -95,3 +95,26 @@ sys-monitor.bundle.zip
 2. **第 2 步(≈2 天)**:置备托管(spawn 看护 + health + DB + server 启动重启),sys-monitor 迁入实测,拆掉手写 launchd plist。
 
 手机侧零改动(manifest 安装链路照旧)。
+
+## 9. 平台扩展:autoSync 静默同步(2026-11-11,万器)
+
+按 §3 演进规则(R1 忽略未知字段)安全追加的顶层可选字段,老 server/老容器直接忽略:
+
+```json
+{ "spec": 1, "appId": "...", "autoSync": true, ... }
+```
+
+- **语义**:作者声明「这个 app 允许静默同步」。手机宿主(dsh-go)在链路建立/
+  市场目录刷新时,对 autoSync 的 app:没装 → **后台静默装上**(不拉任何界面)+
+  瓷贴自动落位;已装旧版 → **静默升级,跳过容器升级确认弹窗**(发布即确认,
+  用户装包时就同意了)。
+- **缺省 false**;非 bool 值按 false 处理不拒装。逐版本权威:新版 bundle.json
+  不写 autoSync → 复位 false。
+- **透传面**:市场行(`/api/v1/apps` 的 `autoSync`)、manifest(`autoSync`)、
+  bundle install 响应。
+- **宿主开关**:设置 → 通用 → 静默同步(默认开,自用场景;关闭后退回市场页
+  手动装/升,非 autoSync 包行为不变)。
+- **实现**:server(本仓 server/lib/bundle.dart 透传 + apps.auto_sync 列)、
+  dsh-go(app/lib/state/auto_sync_state.dart 后台同步 + DiminaPlugin 'sync'
+  通道 + open autoUpdate 参数)、dimina(容器 fork,补丁
+  `patches/dimina-series/0026`);iOS/Harmony 侧参数对齐后置。
