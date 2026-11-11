@@ -121,7 +121,9 @@ class BundleService {
     }
     final BundleManifest manifest = gate.manifest!;
 
-    // ② market row (publish path unchanged underneath)
+    // ② market row (publish path unchanged underneath). The tools manifest
+    // declared in bundle.json `backend.tools` rides with the version row
+    // (声明即接入) — same storage the x-tools-b64 publish path feeds.
     final Map<String, Object?> published = await market.publishVersion(
       archive: archive,
       bytes: bytes,
@@ -133,6 +135,7 @@ class BundleService {
       latest: latest,
       backend: manifest.backend != null,
       autoSync: manifest.autoSync,
+      toolsJson: manifest.backend?.toolsJson,
       actor: 'bundle',
       action: 'bundle.install',
     );

@@ -48,6 +48,7 @@ sys-monitor.bundle.zip
 | `backend.health` | 健康路径,spawn 后打它,200 才算装好 |
 | `backend.gateway` | 网关前缀(现状惯例 `"/"`);install 时**自动注册路由**,替代手动 `route add` |
 | `backend.ai` | 是否接入 AI 网关(可选) |
+| `backend.tools` | **声明即接入**(2026-11-11,把 §7 v1.2 的 tools 收编提前做掉):Agent(DSH)可调的后端接口清单,OpenAPI 子集,install 随版本行入库(`app_versions.tools_json`),`wanqi-mcp-bridge`(server/tool/)轮询聚合注册成 DSH 工具并动态同步;坏声明拒装,老 server 按未知字段忽略(R1) |
 
 ## 4. 固定约定(写死,不进清单)
 
@@ -87,7 +88,7 @@ sys-monitor.bundle.zip
 | 版本 | 加什么 |
 |---|---|
 | **v1.1** | DB migrations 机制(累积式+幂等白名单)· 后端状态枚举实时回写(现在只有 running/stopped)· 蓝绿升级(现在停机几秒)· unpublish / --purge · 并发锁 · server 启动 journal 对账 |
-| **v1.2** | 分片分发(app/backend 双 zip,手机不背 node_modules)· 可复现打包 + bundleSha256 · minContainer 强制执行 · tools.json 收编 + capabilities 门禁 · export/import-data |
+| **v1.2** | 分片分发(app/backend 双 zip,手机不背 node_modules)· 可复现打包 + bundleSha256 · minContainer 强制执行 · ~~tools.json 收编 + capabilities 门禁~~(**tools 收编已提前于 2026-11-11 落地**:声明进 bundle.json `backend.tools` 段,install 入库,wanqi-mcp-bridge 聚合注册成 DSH 工具;capabilities 门禁仍挂 v1.2)· export/import-data |
 | **v2** | 多机交换(同一 Bundle 装到所有主机)· 数据源路由表 / 小程序多连 · 完整 R1–R4 演进规则 · 多运行时(python/go) |
 
 注:多机阶段一(手机侧离线地基,见 `design-multi-host.md`)不依赖 Bundle v1,可并行先行。

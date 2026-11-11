@@ -463,4 +463,102 @@ void main() {
       expect(gate.manifest!.autoSync, isFalse);
     });
   });
+
+  group('backend.tools 声明(声明即接入)', () {
+    Map<String, Object?> backendWith(Object? tools) =>
+        <String, Object?>{
+          'start': 'node dist/main.js',
+          'health': '/healthz',
+          'gateway': <String>['/'],
+          'ai': false,
+          if (tools != null) 'tools': tools,
+        };
+
+    Object? manifestWithBackend(Object? tools) => <String, Object?>{
+          'spec': 1,
+          'appId': 'wanqi-test-app',
+          'name': '测试应用',
+          'version': <String, Object?>{'code': 1, 'name': '0.0.1'},
+          'frontend': <String, Object?>{'entry': 'pages/index/index'},
+          'backend': backendWith(tools),
+        };
+
+    final Map<String, Object?> goodTools = <String, Object?>{
+      'tools': <Object?>[
+        <String, Object?>{
+          'name': 'get_entries',
+          'method': 'GET',
+          'path': '/api/entries',
+          'description': '列出全部条目',
+          'params': <String, Object?>{
+            'type': 'object',
+            'properties': <String, Object?>{
+              'limit': <String, Object?>{'type': 'integer'},
+            },
+          },
+        },
+      ],
+    };
+
+    test('合法声明随包通过,toolsJson 可编码', () {
+      final Archive archive = archiveOf(zipOf(goodFiles(
+          bundleJson: jsonEncode(manifestWithBackend(goodTools)),
+          backend: true)));
+      final BundleGateResult gate = gateBundle(archive, zipBytes: 100);
+      expect(gate.rejected, isFalse);
+      final BundleBackend? backend = gate.manifest!.backend;
+      expect(backend, isNotNull);
+      expect(backend!.tools, isNotNull);
+      expect(backend.toolsJson, contains('get_entries'));
+    });
+
+    test('无 tools 段 = 不暴露,toolsJson 为 null', () {
+      final Archive archive = archiveOf(zipOf(goodFiles(
+          bundleJson: jsonEncode(manifestWithBackend(null)), backend: true)));
+      final BundleGateResult gate = gateBundle(archive, zipBytes: 100);
+      expect(gate.rejected, isFalse);
+      expect(gate.manifest!.backend!.toolsJson, isNull);
+    });
+
+    test('坏声明拒装:工具名非 snake_case', () {
+      final Object? bad = <String, Object?>{
+        'tools': <Object?>[
+          <String, Object?>{'name': 'Get-Entries', 'method': 'GET', 'path': '/x'},
+        ],
+      };
+      final Archive archive = archiveOf(zipOf(goodFiles(
+          bundleJson: jsonEncode(manifestWithBackend(bad)), backend: true)));
+      final BundleGateResult gate = gateBundle(archive, zipBytes: 100);
+      expect(gate.rejected, isTrue);
+      expect(gate.error, contains('backend.tools'));
+    });
+
+    test('坏声明拒装:method 不在 GET/POST/PUT/DELETE', () {
+      final Object? bad = <String, Object?>{
+        'tools': <Object?>[
+          <String, Object?>{'name': 'fetch_all', 'method': 'PATCH', 'path': '/x'},
+        ],
+      };
+      final Archive archive = archiveOf(zipOf(goodFiles(
+          bundleJson: jsonEncode(manifestWithBackend(bad)), backend: true)));
+      expect(gateBundle(archive, zipBytes: 100).rejected, isTrue);
+    });
+
+    test('坏声明拒装:params 非 JSON schema 对象', () {
+      final Object? bad = <String, Object?>{
+        'tools': <Object?>[
+          <String, Object?>{'name': 'fetch_all', 'path': '/x', 'params': 'limit=10'},
+        ],
+      };
+      final Archive archive = archiveOf(zipOf(goodFiles(
+          bundleJson: jsonEncode(manifestWithBackend(bad)), backend: true)));
+      expect(gateBundle(archive, zipBytes: 100).rejected, isTrue);
+    });
+
+    test('共享校验器与市场发布端点同源(validateToolsManifest)', () {
+      expect(validateToolsManifest(goodTools), isNull);
+      expect(validateToolsManifest(<String, Object?>{'tools': 'nope'}),
+          contains('must be an object with a "tools" array'));
+    });
+  });
 }

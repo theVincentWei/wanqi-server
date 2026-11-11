@@ -48,6 +48,7 @@
 | `backend.health` | 有 backend 时 | 健康路径 | spawn 后打它,200 才算装好 |
 | `backend.gateway` | 有 backend 时 | 网关前缀数组(惯例 `["/"]`) | install 时自动注册路由,不需要手动 `route add` |
 | `backend.ai` | 否 | 是否接 AI 网关 | 不接就写 `false` 或省略 |
+| `backend.tools` | 否 | **声明即接入**(2026-11-11):Agent(DSH)可调的后端接口清单,OpenAPI 子集 `{tools:[{name(snake_case),method,path,params?,description?}]}`,`path` 支持 `{pid}` 模板段 | install 随版本行入库,坏声明拒装;wanqi-mcp-bridge 自动注册成 DSH 工具(名字 `mcp__wanqi__<appId>_<tool>`),声明变化 ~30s 自动同步、不重启。只声明窄接口+人写描述,别把全部 REST 暴露出去 |
 
 ### 后端运行时约定(写死,不进清单)
 

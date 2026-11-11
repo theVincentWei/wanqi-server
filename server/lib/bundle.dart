@@ -58,6 +58,7 @@ class BundleBackend {
     required this.health,
     required this.gateway,
     required this.ai,
+    this.tools,
   });
 
   /// Start command; cwd is the unpacked `backend/` dir (§3).
@@ -71,6 +72,49 @@ class BundleBackend {
 
   /// Whether the backend talks to the AI gateway.
   final bool ai;
+
+  /// Optional tools manifest (声明即接入): the backend's agent-facing HTTP
+  /// surface, validated by [validateToolsManifest] at parse time and stored
+  /// on the version row at install. Null = the backend is not exposed to
+  /// the agent. Raw decoded JSON; [toolsJson] is the stored encoding.
+  final Object? tools;
+
+  /// The tools manifest encoded for `app_versions.tools_json`, or null.
+  String? get toolsJson => tools == null ? null : jsonEncode(tools);
+}
+
+/// Validates the tools manifest (OpenAPI subset) a bundle declares under
+/// `backend.tools` or a publish attaches via `x-tools-b64`: the single
+/// source of truth the DSH tool registrar (wanqi-mcp-bridge) registers from.
+/// Returns a problem description, or null when the manifest is acceptable.
+String? validateToolsManifest(Object? decoded) {
+  if (decoded == null) return null;
+  if (decoded is! Map<String, Object?> || decoded['tools'] is! List) {
+    return 'tools must be an object with a "tools" array';
+  }
+  final List<dynamic> tools = decoded['tools'] as List<dynamic>;
+  for (final dynamic tool in tools) {
+    if (tool is! Map<String, Object?>) return 'each tool must be an object';
+    final String name = tool['name'] as String? ?? '';
+    final String method = (tool['method'] as String? ?? 'GET').toUpperCase();
+    final String path = tool['path'] as String? ?? '';
+    if (!RegExp(r'^[a-z][a-z0-9_]{1,40}$').hasMatch(name)) {
+      return 'tool name "$name" must be snake_case';
+    }
+    if (!<String>['GET', 'POST', 'PUT', 'DELETE'].contains(method)) {
+      return 'tool "$name": method must be GET/POST/PUT/DELETE';
+    }
+    if (!path.startsWith('/')) return 'tool "$name": path must start with /';
+    final Object? params = tool['params'];
+    if (params != null && params is! Map<String, Object?>) {
+      return 'tool "$name": params must be a JSON schema object';
+    }
+    final Object? description = tool['description'];
+    if (description != null && description is! String) {
+      return 'tool "$name": description must be a string';
+    }
+  }
+  return null;
 }
 
 /// A parsed bundle.json. Only the fields the server consumes live here;
@@ -186,11 +230,21 @@ class BundleManifest {
     }
     final Object? rawAi = raw['ai'];
     final bool ai = rawAi is bool ? rawAi : false;
+    // 声明即接入:backend.tools 段(可选)。坏声明直接拒装(与 start/health
+    // 同口径的严格校验);老 server 按未知字段忽略整个段(R1 演进规则)。
+    final Object? rawTools = raw['tools'];
+    if (rawTools != null) {
+      final String? problem = validateToolsManifest(rawTools);
+      if (problem != null) {
+        throw BundleException('bundle.json "backend.tools": $problem');
+      }
+    }
     return BundleBackend(
       start: start.trim(),
       health: health,
       gateway: gateway,
       ai: ai,
+      tools: rawTools,
     );
   }
 }

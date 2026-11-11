@@ -15,6 +15,7 @@ import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf_router/shelf_router.dart' as shelf_router;
 
+import 'bundle.dart';
 import 'config.dart';
 import 'db.dart';
 import 'store.dart';
@@ -27,32 +28,9 @@ shelf.Response _json(Object? body, [int status = 200]) =>
     shelf.Response(status, body: jsonEncode(body), headers: _jsonHeaders);
 
 /// Validates the tools manifest (OpenAPI subset) published alongside a
-/// version: the single source of truth the DSH plugin registers from.
-String? validateTools(Object? decoded) {
-  if (decoded == null) return null;
-  if (decoded is! Map<String, Object?> || decoded['tools'] is! List) {
-    return 'tools must be an object with a "tools" array';
-  }
-  final List<dynamic> tools = decoded['tools'] as List<dynamic>;
-  for (final dynamic tool in tools) {
-    if (tool is! Map<String, Object?>) return 'each tool must be an object';
-    final String name = tool['name'] as String? ?? '';
-    final String method = (tool['method'] as String? ?? 'GET').toUpperCase();
-    final String path = tool['path'] as String? ?? '';
-    if (!RegExp(r'^[a-z][a-z0-9_]{1,40}$').hasMatch(name)) {
-      return 'tool name "$name" must be snake_case';
-    }
-    if (!<String>['GET', 'POST', 'PUT', 'DELETE'].contains(method)) {
-      return 'tool "$name": method must be GET/POST/PUT/DELETE';
-    }
-    if (!path.startsWith('/')) return 'tool "$name": path must start with /';
-    final Object? params = tool['params'];
-    if (params != null && params is! Map<String, Object?>) {
-      return 'tool "$name": params must be a JSON schema object';
-    }
-  }
-  return null;
-}
+/// version — one shared validator with the bundle install gate lives in
+/// bundle.dart; this wrapper keeps the market's publish endpoints readable.
+String? validateTools(Object? decoded) => validateToolsManifest(decoded);
 
 /// The zip's file entry at [name], or null when absent or not a regular
 /// file — the read side of publish's `has()` gate.
