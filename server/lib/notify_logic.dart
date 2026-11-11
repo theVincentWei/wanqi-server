@@ -305,3 +305,67 @@ SendDecision decideSend({
   if (rateLimited) return const SendDecision(45009, 'rate limited');
   return const SendDecision.ok();
 }
+
+// ---------------------------------------------------------------------------
+// 宿主上报告知（契约 §3.5 / §6.4 修订：升级完成之类也进收件箱）
+// ---------------------------------------------------------------------------
+
+/// 宿主上报告知的 template_id 固定值：宿主侧事件告知（Bundle 升级完成之类）
+/// 不经模板登记/配额/限流，notify_messages 里以这个固定值落库；宿主点击
+/// 跳转也靠它认出「这是升级告知」。
+const String hostNoticeTemplateId = 'system-upgrade';
+
+/// 宿主上报告知的解析结果（§3.5）。字段就是展示字段：不走模板字段拼装。
+class HostNoticeInput {
+  const HostNoticeInput({
+    required this.appId,
+    required this.title,
+    required this.body,
+    this.page,
+    this.dedupeKey,
+  });
+
+  final String appId;
+  final String title;
+  final String body;
+
+  /// 点击跳转页（小程序内路径）；null = 无 page，宿主按 templateId 自己兜底。
+  final String? page;
+
+  /// 幂等键：同 app + 同 key 重复上报只落一条（uk_app_dedupe + INSERT IGNORE）。
+  final String? dedupeKey;
+}
+
+/// 宿主上报告知的 HTTP body 校验（§3.5）。返回 null 表示合法，否则返回供
+/// errmsg 使用的定位字段名。长度边界按 notify_messages 列宽（title 128 /
+/// body 512 / dedupe_key 128），page 复用 [isValidPage]。
+String? validateHostNotice(Object? rawBody) {
+  if (rawBody is! Map) return 'body';
+  final Object? appId = rawBody['appId'];
+  if (appId is! String || appId.isEmpty) return 'appId';
+  final Object? title = rawBody['title'];
+  if (title is! String || title.trim().isEmpty || title.trim().length > 128) return 'title';
+  final Object? body = rawBody['body'];
+  if (body != null && (body is! String || body.length > 512)) return 'body';
+  if (!isValidPage(rawBody['page'])) return 'page';
+  final Object? dedupeKey = rawBody['dedupeKey'];
+  if (dedupeKey != null && (dedupeKey is! String || dedupeKey.isEmpty || dedupeKey.length > 128)) {
+    return 'dedupeKey';
+  }
+  return null;
+}
+
+/// 校验通过后把 body 解析成 store 可用的形状（缺省补齐：body 空、page/dedupeKey
+/// 空 = null）。调用前必须先用 [validateHostNotice] 校验。
+HostNoticeInput parseHostNotice(Object? rawBody) {
+  final Map raw = rawBody is Map ? rawBody : const <Object?, Object?>{};
+  final Object? page = raw['page'];
+  final Object? dedupeKey = raw['dedupeKey'];
+  return HostNoticeInput(
+    appId: raw['appId'] as String,
+    title: (raw['title'] as String).trim(),
+    body: raw['body'] is String ? raw['body'] as String : '',
+    page: page is String && page.isNotEmpty ? page : null,
+    dedupeKey: dedupeKey is String && dedupeKey.isNotEmpty ? dedupeKey : null,
+  );
+}

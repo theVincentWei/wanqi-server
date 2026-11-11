@@ -4,6 +4,7 @@
 ///   POST /api/v1/apps/<appId>/notify/templates  模板登记（§3.2）
 ///   GET  /api/v1/apps/<appId>/notify/templates  模板列表（§3.2）
 ///   GET  /api/v1/notices?since=&appId=          宿主轮询（含 unread，§3.3）
+///   POST /api/v1/notices                       宿主上报告知（§3.5/§6.4 修订）
 ///   POST /api/v1/notices/read                   标已读（ids / all+appId，§3.3）
 ///   POST /api/v1/notices/consent                宿主订阅回执（仅 loopback，§3.4）
 ///   POST /api/v1/apps/<appId>/notify/token      发放 app token（发布者密钥，§5.4）
@@ -85,6 +86,7 @@ class Notices {
           (shelf.Request request, String appId) =>
               _guard(() => _issueToken(request, appId)))
       ..get('/api/v1/notices', (shelf.Request request) => _guard(() => _poll(request)))
+      ..post('/api/v1/notices', (shelf.Request request) => _guard(() => _hostReport(request)))
       ..post('/api/v1/notices/read', (shelf.Request request) => _guard(() => _read(request)))
       ..post('/api/v1/notices/consent',
           (shelf.Request request) => _guard(() => _consent(request)));
@@ -220,6 +222,28 @@ class Notices {
     final String token = cfg.deviceToken;
     if (token.isEmpty || _isLoopback(request)) return true;
     return _bearer(request) == token;
+  }
+
+  /// POST /api/v1/notices — 宿主上报告知（契约 §3.5 / §6.4 修订：升级完成
+  /// 之类也进收件箱）。鉴权与轮询同一套（[_deviceAuthorized]）：宿主是平台
+  /// 自己的可信端，不用小程序的 app token；body 直接给展示字段（不走模板、
+  /// 不扣配额、不限流）。dedupeKey 可选：同 app 同 key 幂等（升级重试不重复
+  /// 落）。响应带落库行 id（幂等命中回查旧行；0 = 未取到，宿主照常成功处理）。
+  Future<shelf.Response> _hostReport(shelf.Request request) async {
+    if (!_deviceAuthorized(request)) return _errcode(40001, 'invalid credential');
+    final Map<String, Object?>? body = await _readBody(request);
+    if (body == null) return _errcode(47003, 'argument invalid: body');
+    final String? invalid = validateHostNotice(body);
+    if (invalid != null) return _errcode(47003, 'argument invalid: $invalid');
+    final HostNoticeInput input = parseHostNotice(body);
+    final int id = await store.insertHostNotice(
+      appId: input.appId,
+      title: input.title,
+      body: input.body,
+      page: input.page,
+      dedupeKey: input.dedupeKey,
+    );
+    return _ok(<String, Object?>{'id': id});
   }
 
   /// POST /api/v1/notices/read — `{"ids":[...]}` 或 `{"all":true,"appId":"..."}`。

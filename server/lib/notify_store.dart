@@ -346,6 +346,37 @@ class NotifyStore {
     return effective.length;
   }
 
+  /// 宿主上报一条事件告知（契约 §3.5 / §6.4 修订：升级完成之类）。不经模板、
+  /// 配额、限流——宿主是平台自己的可信端，展示字段直接入库；template_id 固定
+  /// [hostNoticeTemplateId]，miniprogram_state 固定 formal。幂等：dedupeKey
+  /// 走 uk_app_dedupe 唯一索引 + INSERT IGNORE（同 key 重复上报只落一条），
+  /// 返回落库行 id，幂等命中/无法取回时返回 0（调用方只当成功处理）。
+  Future<int> insertHostNotice({
+    required String appId,
+    required String title,
+    String body = '',
+    String? page,
+    String? dedupeKey,
+    String templateId = hostNoticeTemplateId,
+  }) async {
+    return db.transaction<int>((DbTx tx) async {
+      await tx.exec(
+          'INSERT IGNORE INTO notify_messages '
+          '(app_id, template_id, title, body, page, miniprogram_state, dedupe_key) '
+          'VALUES (?, ?, ?, ?, ?, "formal", ?)',
+          <Object?>[appId, templateId, title, body, page, dedupeKey]);
+      // IGNORE 命中（重复上报）时 LAST_INSERT_ID 不更新：按 (app, dedupe_key)
+      // 查回已落库的那行；没带 dedupeKey（可重复落）才读 LAST_INSERT_ID。
+      final List<Map<String, Object?>> rows = dedupeKey == null
+          ? await tx.q('SELECT LAST_INSERT_ID() AS id')
+          : await tx.q(
+              'SELECT id FROM notify_messages '
+              'WHERE app_id = ? AND dedupe_key = ? ORDER BY id DESC LIMIT 1',
+              <Object?>[appId, dedupeKey]);
+      return rows.isEmpty ? 0 : _int(rows.first['id']) ?? 0;
+    });
+  }
+
   // -------------------------------------------------------------------------
   // 内部查询
   // -------------------------------------------------------------------------

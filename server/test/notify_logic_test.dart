@@ -396,4 +396,80 @@ void main() {
       expect(const SendOutcome(errcode: 43101, errmsg: 'refused').notice, isNull);
     });
   });
+
+  group('宿主上报告知(§3.5/§6.4 修订:升级完成之类也进收件箱)', () {
+    test('合法 body 校验通过,解析补齐缺省', () {
+      const Map<String, Object?> body = <String, Object?>{
+        'appId': 'wx3d8b6f2a9c4e7d15',
+        'title': '双拼教练',
+        'body': '「双拼教练」已升级至 v1.3.0',
+        'dedupeKey': 'upgrade-30',
+      };
+      expect(validateHostNotice(body), isNull);
+      final HostNoticeInput input = parseHostNotice(body);
+      expect(input.appId, 'wx3d8b6f2a9c4e7d15');
+      expect(input.title, '双拼教练');
+      expect(input.body, '「双拼教练」已升级至 v1.3.0');
+      expect(input.page, isNull);
+      expect(input.dedupeKey, 'upgrade-30');
+    });
+
+    test('body 缺省字段:body 空、page/dedupeKey 空 = null', () {
+      const Map<String, Object?> body = <String, Object?>{
+        'appId': 'wx3d8b6f2a9c4e7d15',
+        'title': '记账',
+      };
+      expect(validateHostNotice(body), isNull);
+      final HostNoticeInput input = parseHostNotice(body);
+      expect(input.body, '');
+      expect(input.page, isNull);
+      expect(input.dedupeKey, isNull);
+    });
+
+    test('非法逐项定位:非 Map/appId/title/body/page/dedupeKey', () {
+      expect(validateHostNotice('nope'), 'body');
+      expect(validateHostNotice(<String, Object?>{'title': 't'}), 'appId');
+      expect(validateHostNotice(<String, Object?>{'appId': 'wx1'}), 'title');
+      expect(validateHostNotice(<String, Object?>{'appId': 'wx1', 'title': ' '}), 'title');
+      expect(
+        validateHostNotice(<String, Object?>{
+          'appId': 'wx1',
+          'title': 't',
+          'body': 'x' * 513,
+        }),
+        'body',
+      );
+      expect(
+        validateHostNotice(<String, Object?>{
+          'appId': 'wx1',
+          'title': 't',
+          'page': 'https://evil.example',
+        }),
+        'page',
+      );
+      expect(
+        validateHostNotice(<String, Object?>{
+          'appId': 'wx1',
+          'title': 't',
+          'dedupeKey': 'k' * 129,
+        }),
+        'dedupeKey',
+      );
+    });
+
+    test('title 两端空白在解析时裁掉(128 按裁后计)', () {
+      final String pad = 'x' * 127;
+      expect(
+        validateHostNotice(<String, Object?>{'appId': 'wx1', 'title': ' $pad '}),
+        isNull,
+      );
+      expect(
+        validateHostNotice(<String, Object?>{'appId': 'wx1', 'title': ' $pad x'}),
+        'title',
+      );
+      final HostNoticeInput input =
+          parseHostNotice(<String, Object?>{'appId': 'wx1', 'title': ' 记账 '});
+      expect(input.title, '记账');
+    });
+  });
 }
