@@ -34,7 +34,7 @@
 git clone <this-repo> && cd wanqi
 git clone <miniprograms-repo>          # dsh-go-miniprograms,与 wanqi 并列放置
 
-# 0. 先体检(等价于 server/tool/lifecycle.sh doctor;不健康会自动按依赖序拉起)
+# 0. 先体检(不健康会自动按依赖序拉起;装了全局命令则直接 `wanqi service doctor`)
 dart run bin/wanqi.dart service doctor
 
 # 1. 起服务端(默认 :7610;测试建议 :7620)
@@ -46,6 +46,12 @@ dart run bin/wanqi.dart bundle install ../../dsh-go-miniprograms/dist/wx5b8e2f4a
 
 # 3. 打开市场 / 拉应用列表
 curl -s http://127.0.0.1:7620/api/v1/apps | head
+```
+
+装全局命令(可选;之后任何目录直接 `wanqi service doctor` / `wanqi bundle install …`):
+
+```bash
+cp server/tool/wanqi ~/.local/bin/wanqi && chmod +x ~/.local/bin/wanqi
 ```
 
 带后端的示例(sys-monitor)会自动:解包 `backend/` → 动态端口拉起 → 打 `/healthz` 到 200 → 按网关前缀注册路由;server 重启后自动重拉。四命令(均不碰 `data/logs/DB`):

@@ -39,7 +39,7 @@ server/tool/lifecycle.sh start|stop|restart [db|server|engine|test|all]
 server/tool/lifecycle.sh logs <db|server|engine|test> [-n 行数] [-f]
 ```
 
-> CLI 糖:`wanqi service …`(server/lib/wanqi_cli.dart)是本表的**薄封装**——直接委托本脚本并透传退出码;脚本本体始终是救火地基,不依赖 dart/pub 环境。
+> **入口定稿(2026-11-11 下午)**:`wanqi service …` 是**唯一正式入口**——全局命令 shim 在 `~/.local/bin/wanqi`(源文件 `server/tool/wanqi`;CLI 侧 server/lib/wanqi_cli.dart 委托本脚本并透传退出码)。server 本身就是 dart,CLI 入口不引入任何新依赖;`tool/lifecycle.sh` 降级为**实现细节 + dart 不可用时的应急后门**(如 SDK 升级窗口),不算接口。
 
 实现要点:
 

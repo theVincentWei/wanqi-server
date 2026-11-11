@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# wanqi 全局命令入口(生命周期设计:docs/server-lifecycle.md §3)
+# 定位仓库、注入 PUB_CACHE 后透传给 dart CLI;dart 不可用时仅 `wanqi service` 降级走 lifecycle.sh。
+# 安装:cp server/tool/wanqi ~/.local/bin/wanqi && chmod +x ~/.local/bin/wanqi
+set -euo pipefail
+REPO="${WANQI_REPO:-$HOME/Code/wanqi}"
+DART="${DART_BIN:-$HOME/dev/flutter/bin/cache/dart-sdk/bin/dart}"
+if [ ! -x "$DART" ]; then
+  if [ "${1:-}" = "service" ]; then
+    shift
+    exec bash "$REPO/server/tool/lifecycle.sh" "$@"
+  fi
+  echo "wanqi: dart 不可用($DART)。service 已降级为 lifecycle.sh;其余命令需要 dart。" >&2
+  exit 69
+fi
+exec env PUB_CACHE="$REPO/.pub-cache" "$DART" run "$REPO/server/bin/wanqi.dart" "$@"
