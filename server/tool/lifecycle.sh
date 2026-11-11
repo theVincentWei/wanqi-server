@@ -160,6 +160,59 @@ doctor() {
   return $fail
 }
 
+# ---------- install / uninstall(一次性注册到 launchd) ----------
+PLIST_DIR="$HOME/Library/LaunchAgents"
+install_services() {
+  "$BREW" services start mariadb >/dev/null 2>&1 || true  # 注册 + 开机自启(gui 域下生效)
+  local rc=0
+  for lbl in app.dsh.apphub.server app.dsh.apphub.engine app.dsh.wanqi-test.server; do
+    local plist="$PLIST_DIR/$lbl.plist"
+    if [ ! -f "$plist" ]; then
+      log "install: ✗ $plist 缺失,该组件跳过"; rc=1; continue
+    fi
+    launchctl bootstrap "gui/$UID_N" "$plist" >/dev/null 2>&1 || true
+    launchctl kickstart -k "gui/$UID_N/$lbl" >/dev/null 2>&1 || true
+    if launchctl print "gui/$UID_N/$lbl" >/dev/null 2>&1; then
+      log "install: $lbl ✓(launchd 托管)"
+    else
+      log "install: $lbl ✗ 当前会话域无权操作 launchd——请在你自己的 Terminal 里重跑: wanqi service install"
+      rc=1
+    fi
+  done
+  [ "$rc" = 0 ] && log "install: 全部注册完成" || log "install: 部分失败(见上)"
+  return $rc
+}
+uninstall_services() {
+  local rc=0
+  for lbl in app.dsh.wanqi-test.server app.dsh.apphub.engine app.dsh.apphub.server; do
+    launchctl bootout "gui/$UID_N/$lbl" >/dev/null 2>&1 || true
+    if launchctl print "gui/$UID_N/$lbl" >/dev/null 2>&1; then
+      log "uninstall: $lbl 仍在(域受限,请在用户 Terminal 重跑)"; rc=1
+    else
+      log "uninstall: $lbl 已卸出"
+    fi
+  done
+  "$BREW" services stop mariadb >/dev/null 2>&1 || true
+  log "uninstall: MariaDB brew 注册已停(数据保留);手动拉起态进程未动"
+  return $rc
+}
+
+# ---------- run(前台调试) ----------
+run_fg() {
+  case "${1:-server}" in
+    server)
+      db_up || { log "run: DB(3306) 未起,先 wanqi service start db"; return 1; }
+      cd "$HOME/Code/wanqi/server" || return 1
+      export PUB_CACHE="$HOME/Code/wanqi/.pub-cache"
+      exec "$HOME/dev/flutter/bin/cache/dart-sdk/bin/dart" run bin/apphub.dart --config "$APPDIR/config.json"
+      ;;
+    engine)
+      exec "$HOME/.local/bin/dsh" web --host 127.0.0.1 --port 7611 --no-open
+      ;;
+    *) log "run: 仅支持 server|engine"; return 2 ;;
+  esac
+}
+
 # ---------- 分发 ----------
 ensure_ordered() { # start/restart 的组件=all 时按依赖序
   case "${1:-all}" in
@@ -189,6 +242,14 @@ case "$cmd" in
     status_plain; exit 0 ;;
   doctor)
     lock; doctor; exit $? ;;
+  ensure)
+    lock; doctor; exit $? ;;
+  install)
+    lock; install_services; exit $? ;;
+  uninstall)
+    lock; uninstall_services; exit $? ;;
+  run)
+    run_fg "$@"; exit $? ;;
   start)
     lock; ensure_ordered "${1:-all}"; exit $? ;;
   stop)

@@ -36,8 +36,11 @@ Usage: wanqi — Wanqi Bundle CLI
   wanqi service doctor               # 生命周期体检:按 db→server→engine→test 检活+自动拉起
   wanqi service status [--json]      # 四组件健康表 + 托管形态(launchd/nohup)
   wanqi service start|stop|restart [db|server|engine|test|all]
+  wanqi service ensure               # 确保 db/server/engine 在跑(等价 doctor,不重装服务)
+  wanqi service install | uninstall  # 注册/卸载 launchd 后台服务(一次性,须用户 Terminal 的 gui 域)
+  wanqi service run [server|engine]  # 前台跑单个组件(调试,Ctrl-C 退出)
   wanqi service logs <db|server|engine|test> [-n N] [-f]
-                                     (薄封装,委托 server/tool/lifecycle.sh;见 docs/server-lifecycle.md)
+                                     (薄封装,委托 server/tool/lifecycle.sh;install/uninstall 需用户 Terminal。见 docs/server-lifecycle.md)
 
 Common flags: --server http://127.0.0.1:7620  --key <publisherKey>
 (--key 未给时自动解析:APPHUB_KEY env → 主机 config 文件,无需写在命令串里。)

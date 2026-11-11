@@ -36,6 +36,9 @@
 server/tool/lifecycle.sh status [--json]        # 四组件健康表 + 托管形态(launchd/nohup/未运行)
 server/tool/lifecycle.sh doctor                 # 检查 + 按依赖序自动修复;exit 0=全绿,1=仍有组件不健康
 server/tool/lifecycle.sh start|stop|restart [db|server|engine|test|all]
+server/tool/lifecycle.sh ensure                 # = doctor 别名:确保在跑,不重装服务
+server/tool/lifecycle.sh install | uninstall    # 注册/卸载 launchd 后台服务(动词对齐 hermes gateway;须 gui 域)
+server/tool/lifecycle.sh run [server|engine]    # 前台跑单个组件(调试)
 server/tool/lifecycle.sh logs <db|server|engine|test> [-n 行数] [-f]
 ```
 
@@ -53,7 +56,7 @@ server/tool/lifecycle.sh logs <db|server|engine|test> [-n 行数] [-f]
 
 - `bin/apphub.dart`:`Db.connect` 加重试(10 × 3s),启动行打 `db ready (127.0.0.1:3306)`;连接失败的重试期打 `waiting for db (n/10)`。消除「server 比 DB 先起就秒死」的时序脆断——脚本级 wait + 代码级 retry 双保险。
 
-## 5. 一次性迁移(用户 Terminal,gui 域)
+## 5. 一次性迁移(用户 Terminal,gui 域;或直接 `wanqi service install`)
 
 ```bash
 brew services start mariadb                                  # 注册 + 开机自启
