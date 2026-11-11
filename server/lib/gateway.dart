@@ -175,10 +175,16 @@ class Gateway {
     };
 
     try {
+      // 请求体必须原样转发(POST/PUT):此前构造 http.Request 未带 body,
+      // 所有经网关的 POST 到后端都是空 body——首个带后端写接口的小程序
+      // (todo-reminder)联调时暴露。content-length 由 http.Request 按体长重算。
+      final List<int> bodyBytes =
+          await request.read().expand((List<int> chunk) => chunk).toList();
       final http.Response upstreamResponse = await _client
           .send(http.Request(request.method, upstream)
             ..headers.addAll(headers)
-            ..followRedirects = false)
+            ..followRedirects = false
+            ..bodyBytes = bodyBytes)
           .then((streamed) => http.Response.fromStream(streamed))
           .timeout(Duration(milliseconds: route.timeoutMs));
       final Map<String, String> responseHeaders = <String, String>{
