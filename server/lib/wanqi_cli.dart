@@ -11,7 +11,10 @@
 ///                                  (手机端整包卸载的清除勾选,见 spec §6)
 ///   wanqi list                     the market listing
 ///
-/// Common flags: --server http://127.0.0.1:7620  --key <publisherKey>
+/// Common flags: --server http://127.0.0.1:7610  --key <publisherKey>
+/// (默认对准生产货架 :7610——手机端卸载等主机命令不传 --server 也必须落在
+/// 生产;测试货架 :7620 一律显式 --server。2026-11-11 手机端整包卸载 404 的
+/// 根因就是默认打在 :7620,而 wanqi-test-autosync 只在生产货架。)
 /// (--key 缺省自动解析:APPHUB_KEY env → 主机 config 文件,命令串无需出现密钥。)
 library;
 
@@ -45,7 +48,8 @@ Usage: wanqi — Wanqi Bundle CLI
   wanqi service logs <db|server|engine|test> [-n N] [-f]
                                      (薄封装,委托 server/tool/lifecycle.sh;install/uninstall 需用户 Terminal。见 docs/server-lifecycle.md)
 
-Common flags: --server http://127.0.0.1:7620  --key <publisherKey>
+Common flags: --server http://127.0.0.1:7610  --key <publisherKey>
+(--server 缺省 = 生产货架 :7610;测试货架 :7620 请显式 --server。
 (--key 未给时自动解析:APPHUB_KEY env → 主机 config 文件,无需写在命令串里。)
 ''';
 
@@ -134,7 +138,7 @@ class HttpWanqiApi implements WanqiApi {
 class WanqiCli {
   WanqiCli({WanqiApi? api, String? defaultServer, String? envKey, String? home, String? cwd})
       : api = api ?? HttpWanqiApi(),
-        defaultServer = defaultServer ?? 'http://127.0.0.1:7620',
+        defaultServer = defaultServer ?? 'http://127.0.0.1:7610',
         envKey = envKey ?? Platform.environment['APPHUB_KEY'] ?? '',
         home = home ?? Platform.environment['HOME'],
         cwd = cwd ?? Directory.current.path;
