@@ -21,7 +21,7 @@ Dimina 容器 fork 相对上游 didi/dimina 的**全部本地适配**存档,不�
 ```bash
 git clone https://github.com/didi/dimina.git && cd dimina
 git checkout eef595cf6d756701bf0d32b9a90e317f86ba944e      # 基线(上游 tip)
-git am /path/to/patches/dimina-series/*.patch              # 按 0001→0026 编号顺序
+git am /path/to/patches/dimina/series/*.patch              # 按 0001→0026 编号顺序
 ```
 
 干跑实测:26 个 `git am` 全过、零冲突,完成后树与 fork main 逐字节一致。

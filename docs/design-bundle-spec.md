@@ -117,4 +117,4 @@ sys-monitor.bundle.zip
 - **实现**:server(本仓 server/lib/bundle.dart 透传 + apps.auto_sync 列)、
   dsh-go(app/lib/state/auto_sync_state.dart 后台同步 + DiminaPlugin 'sync'
   通道 + open autoUpdate 参数)、dimina(容器 fork,补丁
-  `patches/dimina-series/0026`);iOS/Harmony 侧参数对齐后置。
+  `patches/dimina/series/0026`);iOS/Harmony 侧参数对齐后置。

@@ -7,7 +7,7 @@
 > - **宿主端(dsh-go,Flutter 手机壳)**:通知中心、订阅面板、系统通知投递、点击跳转——**闭源,不在本仓库**;
 > - **容器端(Dimina,小程序容器)**:`wx.requestSubscribeMessage` / `getSetting.subscriptionsSetting` API 面——
 >   容器本体不开源,但其所需的**全部容器侧改动已物化为补丁**公开在本仓库
->   [`patches/dimina-notify/`](../patches/dimina-notify/README.md)(含逐文件 diff 摘要与宿主对接说明);
+>   [`patches/dimina/notify-only/`](../patches/dimina/notify-only/README.md)(含逐文件 diff 摘要与宿主对接说明);
 > - **平台端(AppHub server)**:模板登记、发送判定、配额记账、通知存储、轮询/已读——在本仓库 `server/`。
 >
 > **实现状态**:镜像时点 P1–P4 已全部实现(含 §10 实现偏差登记,改代码前必读 §10);

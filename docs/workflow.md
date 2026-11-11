@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | **wanqi** | 我们的平台本体(开源) | 无(自己的) | `master` 线性 | master 本身就是存档 |
 | **dsh-Go** | 手机宿主(闭源,非我们所有) | ccch1mneyyy/dsh-Go(用户 fork,走 PR 主线) | `main`(本地线,领先 origin/main 120+) | `patches/dsh-go-series/catalog.tsv` 分类目录(+按需再生) |
-| **dimina** | 容器 fork(上游 didi/dimina 本体不开源) | didi/dimina | `main`(本地线,领先上游 28) | `patches/dimina-series/` **全量补丁物化**(线性可 am 重放) |
+| **dimina** | 容器 fork(上游 didi/dimina 本体不开源) | didi/dimina | `main`(本地线,领先上游 28) | `patches/dimina/series/` **全量补丁物化**(线性可 am 重放) |
 
 不变式:
 1. **开发位置 = 改动的家**:服务端/CLI/文档/示例在 wanqi;手机宿主在 dsh-Go;容器在 dimina。不用软链接、不做跨仓源码镜像。
@@ -22,7 +22,7 @@
 ② 开发 + 各自仓的测试/analyze 全绿
 ③ 跨仓联动验收(如 autoSync:测试 server E2E + 真机/模拟器行为断言)
 ④ 验收通过 → 各主线 fast-forward(wanqi master / dsh-Go main / dimina main)
-⑤ 归档:dimina 追加 format-patch(--binary)进 dimina-series;dsh-Go 追加 catalog 行
+⑤ 归档:dimina 追加 format-patch(--binary)进 patches/dimina/series;dsh-Go 追加 catalog 行
 ⑥ 特性分支删除;两侧工作树回到干净
 ```
 
@@ -43,7 +43,7 @@
 本仓历史线性(am 重放可逐字节还原,树 SHA 已对账)——所以:
 
 - **升级方式 = rebase**:`git fetch --unshallow origin && git rebase --onto <新上游基线> <旧基线> main`,merge 提交会被丢弃——**这是安全的**(树 SHA 对账已证明内容不依赖它们),但 rebase 后必须跑一次「全系列 git am → 树 SHA 对账」作为安全门。
-- rebase 后:`patches/dimina-series/` 全系列**重新物化**(编号/基线/树 SHA 全部刷新)+ README 更新。
+- rebase 后:`patches/dimina/series/` 全系列**重新物化**(编号/基线/树 SHA 全部刷新)+ README 更新。
 - **建议(未做)**:给 fork 建自己的私有远端,原始历史双保险。
 
 ## 4. wanqi 自身

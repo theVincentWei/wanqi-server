@@ -37,7 +37,7 @@ dsh-Go 宿主 App(`ccch1mneyyy/dsh-Go`,fork 自上游 PR #602 时代)相对 `ori
 
 - dsh-Go 历史**不适合补丁序列传输**;它的正确复制/升级方式是 **git 原生操作**——
   `git clone` / `git fetch` + `git rebase` / `git merge`,由 git 自己处理 merge 语义。
-- **dimina(`../dimina-series/`)是另一回事**:它的 3 个 merge 均为纯特性分支合入、
+- **dimina(`../series/`)是另一回事**:它的 3 个 merge 均为纯特性分支合入、
   无自含内容,format-patch 跳过后线性重放的最终树与 fork HEAD **逐字节一致**(树 SHA
   `777918bb…` 双侧对账),补丁序列成立。
 - 若确需 dsh-Go 的补丁形态(如平台类精选对外发布),等开源范围拍板后**从 git 直接再生**:
@@ -60,9 +60,9 @@ git format-patch -1 <sha> --binary -o /tmp/dsh-go-series
 **`git push origin main` 一步即得完整备份**(含全部 merge 结构),比任何补丁序列都可靠。
 仓库 .git 约 1.3GB,首次 push 前可用 `git count-objects -vH` 评估。
 
-## 与 dimina-series 的关系
+## 与 dimina series 的关系
 
-| | [dimina-series](../dimina-series/) | 本目录(dsh-go-series) |
+| |  [dimina series](../series/) | 本目录(dsh-go-series) |
 |---|---|---|
 | 内容 | 25 个补丁文件(全量可重放) | catalog.tsv 分类清单(无补丁体) |
 | merge 处理 | 3 个纯合入,跳过无损(树 SHA 对账) | 32 个含真实内容,跳过有损 → 不出补丁 |
