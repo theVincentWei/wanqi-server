@@ -39,13 +39,13 @@ Usage: wanqi — Wanqi Bundle CLI
   wanqi list                         list installed apps
 
   wanqi serve [--config <path>]      # 前台跑 server(与 launchd 启动器同核,分发形态)
-  wanqi service doctor               # 生命周期体检:按 db→server→engine→test 检活+自动拉起
-  wanqi service status [--json]      # 四组件健康表 + 托管形态(launchd/nohup)
-  wanqi service start|stop|restart [db|server|engine|test|all]
-  wanqi service ensure               # 确保 db/server/engine 在跑(等价 doctor,不重装服务)
+  wanqi service doctor               # 生命周期体检:按 db→server→test 检活+自动拉起;engine(外部)只观察
+  wanqi service status [--json]      # 组件健康表 + 托管形态(launchd/nohup);engine 标注外部
+  wanqi service start|stop|restart [db|server|test|all]
+  wanqi service ensure               # 确保 db/server/test 在跑(等价 doctor,不重装服务)
   wanqi service install | uninstall  # 注册/卸载 launchd 后台服务(一次性,须用户 Terminal 的 gui 域)
-  wanqi service run [server|engine]  # 前台跑单个组件(调试,Ctrl-C 退出)
-  wanqi service logs <db|server|engine|test> [-n N] [-f]
+  wanqi service run [server]         # 前台跑 server(调试,Ctrl-C 退出)
+  wanqi service logs <db|server|engine|test> [-n N] [-f]  # logs 仍可看外部 engine
                                      (薄封装,委托 server/tool/lifecycle.sh;install/uninstall 需用户 Terminal。见 docs/server-lifecycle.md)
 
 Common flags: --server http://127.0.0.1:7610  --key <publisherKey>

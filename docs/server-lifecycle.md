@@ -2,6 +2,7 @@
 
 > 状态(2026-11-11):脚本版已全部落地并实测;`bin/apphub.dart` 的 Db.connect 重试为唯一待办(脚本级 wait 已双保险)。
 > 背景:2026-11-11 下午整条服务链(MariaDB/server/引擎)同时躺平——launchd 域进不去、DB 没起、server 连库即崩、只能全程手动 nohup 救火。本文把生命周期定成法:单入口、依赖有序、健康可测、agent 可操作、launchd 只管看护。
+> 修订(2026-11-12 拍板):**engine(dsh web, 7611) 移出万器管理**——双 dsh web 实例(GUI 宿主 + 引擎)共用 ~/.dsh 导致调度任务双投递(GLM 触发每次开两个会话)。engine 属 DSH 侧服务:lifecycle 只在 status/doctor 里观察健康(不计退出码、不拉起),start/stop/restart/ensure/run/install/uninstall 全部摘除;AI 网关依赖不变(引擎不在时 AI 端点 503 降级)。启停归 DSH 侧:~/dsh/apphub/engine-supervisor.sh + engine.stop 开关。
 
 ## 1. 组件清单与拓扑
 
@@ -9,10 +10,10 @@
 |---|---|---|---|---|
 | MariaDB | 3306 | `/opt/homebrew/opt/mariadb/bin/mariadbd --datadir=/opt/homebrew/var/mysql --port=3306 --bind-address=127.0.0.1`(注册态由 brew services 托管,手动态由 lifecycle nohup) | – | `/opt/homebrew/var/mysql` |
 | wanqi server(生产) | 7610 | `~/dsh/apphub/start-apphub-server.sh` → `dart run bin/apphub.dart --config ~/dsh/apphub/config.json`(代码源 `~/Code/wanqi/server`) | MariaDB | DB `apphub` + `~/dsh/apphub/data` |
-| 引擎(dsh web) | 7611 | `~/dsh/apphub/engine-supervisor.sh` → `~/.local/bin/dsh web --port 7611`(崩溃 3s 重启,维护 `engine-launch.txt` token) | – | 日志 |
+| 引擎(dsh web,外部) | 7611 | `~/dsh/apphub/engine-supervisor.sh` → `~/.local/bin/dsh web --port 7611`(维护 `engine-launch.txt` token;2026-11-12 起启停归 DSH 侧,当前已停用) | – | 日志 |
 | wanqi server(测试) | 7620 | `~/dsh/apphub/start-wanqi-test.sh`(独立库 `apphub_test`,数据 `~/dsh/wanqi-test`) | MariaDB | 独立库 + 独立数据目录 |
 
-依赖图(严格顺序):`MariaDB → server(生产/测试) → [server 自己拉起各 bundle backend];引擎与 DB 无关,可并行。
+依赖图(严格顺序):`MariaDB → server(生产/测试) → [server 自己拉起各 bundle backend]`。引擎为 DSH 侧外部组件,与万器无启动依赖(2026-11-12 移出,见顶部修订)。
 
 ## 2. 不变式
 
@@ -20,7 +21,7 @@
 2. **启动器只有一份**:launchd plist 与 lifecycle.sh 都只是调同一个脚本。launchd 负责 KeepAlive(崩溃自愈 + 登录自启);lifecycle.sh 负责 agent/手动形态。两者幂等共存:
    - `start`:目标端口已健康 → no-op;否则清 stale 端口占用 → 先试 `launchctl kickstart`(gui 域可用时最正规),报 125/域错误则降级 `nohup <脚本>`。
    - `stop`:kill 监听进程。launchd 托管态下 KeepAlive 会拉回(stop≈restart),真要停服去用户 Terminal `launchctl bootout`——文档如实写明,不做假语义。
-3. **依赖内建**:server 启动脚本内建 wait-for-db(循环探 3306,最多 60s,超时打明确报错指向 `lifecycle.sh doctor db`);lifecycle 拉起顺序恒为 db→server→(并行)engine。
+3. **依赖内建**:server 启动脚本内建 wait-for-db(循环探 3306,最多 60s,超时打明确报错指向 `lifecycle.sh doctor db`);lifecycle 拉起顺序恒为 db→server→test(engine 外部,不拉起)。
 4. **健康判定**(doctor 的唯一标准):
    - 3306:TCP 可连 + `mariadb -e 'SELECT 1'` 成功;
    - 7610/7620:`GET /api/v1/apps` 200;
@@ -33,13 +34,13 @@
 ## 3. lifecycle.sh 接口
 
 ```
-server/tool/lifecycle.sh status [--json]        # 四组件健康表 + 托管形态(launchd/nohup/未运行)
-server/tool/lifecycle.sh doctor                 # 检查 + 按依赖序自动修复;exit 0=全绿,1=仍有组件不健康
-server/tool/lifecycle.sh start|stop|restart [db|server|engine|test|all]
+server/tool/lifecycle.sh status [--json]        # 组件健康表 + 托管形态(launchd/nohup/未运行);engine 标注外部
+server/tool/lifecycle.sh doctor                 # 检查 + 按依赖序自动修复(db/server/test);engine 只观察不计退出码
+server/tool/lifecycle.sh start|stop|restart [db|server|test|all]   # engine 参数保留但只提示,不动手
 server/tool/lifecycle.sh ensure                 # = doctor 别名:确保在跑,不重装服务
 server/tool/lifecycle.sh install | uninstall    # 注册/卸载 launchd 后台服务(动词对齐 hermes gateway;须 gui 域)
-server/tool/lifecycle.sh run [server|engine]    # 前台跑单个组件(调试)
-server/tool/lifecycle.sh logs <db|server|engine|test> [-n 行数] [-f]
+server/tool/lifecycle.sh run [server]           # 前台跑单个组件(调试)
+server/tool/lifecycle.sh logs <db|server|engine|test> [-n 行数] [-f]   # logs 仍可看外部 engine
 ```
 
 > **入口定稿(2026-11-11 下午)**:`wanqi service …` 是**唯一正式入口**——全局命令 shim 在 `~/.local/bin/wanqi`(源文件 `server/tool/wanqi`;CLI 侧 server/lib/wanqi_cli.dart 委托本脚本并透传退出码)。server 本身就是 dart,CLI 入口不引入任何新依赖;`tool/lifecycle.sh` 降级为**实现细节 + dart 不可用时的应急后门**(如 SDK 升级窗口),不算接口。

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # wanqi server 生命周期单入口(设计:docs/server-lifecycle.md v1,2026-11-11)
-# 组件:db(3306) → server(7610) / engine(7611) / test(7620)
+# 组件:db(3306) → server(7610) / test(7620);engine(7611)=DSH 侧外部组件,只观察不管理(2026-11-12 移出)
 # 用法:
 #   lifecycle.sh status [--json]
-#   lifecycle.sh doctor                # 检查 + 按依赖序自动修复;exit 0=全绿
-#   lifecycle.sh start|stop|restart [db|server|engine|test|all]
-#   lifecycle.sh logs <db|server|engine|test> [-n N] [-f]
+#   lifecycle.sh doctor                # 检查 + 按依赖序自动修复;exit 0=全绿(engine 只观察)
+#   lifecycle.sh start|stop|restart [db|server|test|all]
+#   lifecycle.sh logs <db|server|engine|test> [-n N] [-f]  # logs 仍可看 engine
 # 幂等;launchctl 域不可见时自动降级 nohup,绝不因此失败。
 set -u
 
@@ -65,24 +65,9 @@ stop_server() {
   log "server: 已停(launchd 托管态会被拉回,属预期)"; return 0
 }
 
-# ---------- engine(7611) ----------
-start_engine() {
-  eng_ok && { log "engine: 7611 已在,跳过"; return 0; }
-  launchctl kickstart -k "gui/$UID_N/app.dsh.apphub.engine" >/dev/null 2>&1 || true
-  for _ in 1 2 3; do sleep 4; eng_ok && { log "engine: launchd 拉起 ✓"; return 0; }; done
-  log "engine: 降级 nohup…"
-  nohup /bin/bash "$APPDIR/engine-supervisor.sh" >> "$LOGD/engine-supervisor.log" 2>&1 &
-  for _ in $(seq 1 8); do sleep 3; eng_ok && { log "engine: nohup 拉起 ✓"; return 0; }; done
-  log "engine: ✗ 起不来,看 $LOGD/engine-supervisor.log"; return 1
-}
-stop_engine() {
-  pkill -f 'engine-supervisor.sh' 2>/dev/null || true
-  sleep 1
-  pids=$(lsof -nP -t -iTCP:7611 -sTCP:LISTEN 2>/dev/null || true)
-  [ -n "$pids" ] && { kill $pids 2>/dev/null; sleep 2; }
-  port_up 7611 && { log "engine: 7611 仍占用"; return 1; }
-  log "engine: 已停(launchd 托管态会被拉回,属预期)"; return 0
-}
+# ---------- engine(7611):外部组件,2026-11-12 移出管理 ----------
+# engine(dsh web)属 DSH 侧服务,万器不再启停/修复(双 dsh web 实例曾致调度任务双投递)。
+# 健康观察见 status/doctor;启停归 DSH 侧:~/dsh/apphub/engine-supervisor.sh(+engine.stop 开关)。
 
 # ---------- test(7620) ----------
 start_test() {
@@ -112,7 +97,7 @@ status_plain() {
   local h
   db_up && h=✓ || h=✗; echo "db     health=$h mode=$(mode_of sh.brew.mariadb mariadbd)"
   srv_ok && h=✓ || h=✗; echo "server health=$h mode=$(mode_of app.dsh.apphub.server 'apphub\.dart|start-apphub-server\.sh')"
-  eng_ok && h=✓ || h=✗; echo "engine health=$h mode=$(mode_of app.dsh.apphub.engine engine-supervisor.sh)"
+  eng_ok && h=✓ || h=✗; echo "engine health=$h mode=$(mode_of app.dsh.apphub.engine engine-supervisor.sh) [外部:DSH 侧]"
   tst_ok && h=✓ || h=✗; echo "test   health=$h mode=$(mode_of app.dsh.wanqi-test.server start-wanqi-test-server.sh)"
 }
 status_json() {
@@ -144,7 +129,7 @@ def tst(): return http("http://127.0.0.1:7620/api/v1/apps") == 200
 print(json.dumps({
     "db":     {"health": port_up(3306), "mode": mode("sh.brew.mariadb", "mariadbd")},
     "server": {"health": srv(), "mode": mode("app.dsh.apphub.server", "start-apphub-server.sh")},
-    "engine": {"health": port_up(7611), "mode": mode("app.dsh.apphub.engine", "engine-supervisor.sh")},
+    "engine": {"health": port_up(7611), "mode": mode("app.dsh.apphub.engine", "engine-supervisor.sh"), "external": True},
     "test":   {"health": tst(), "mode": mode("app.dsh.wanqi-test.server", "start-wanqi-test-server.sh")},
 }, ensure_ascii=False))
 PY
@@ -154,8 +139,10 @@ doctor() {
   local fail=0
   start_db    || fail=1
   start_server|| fail=1
-  start_engine|| fail=1
   start_test  || fail=1
+  # engine 自 2026-11-12 移出管理:只观察,不计入退出码,不自动拉起
+  eng_ok && log "engine: 外部组件(DSH 侧)健康 ✓" \
+          || log "engine: 外部组件(DSH 侧)不在(AI 网关 AI 端点将 503;万器不管理、不拉起)"
   if [ "$fail" = 0 ]; then log "SERVICE_OK"; else log "仍有组件不健康(见上)"; fi
   return $fail
 }
@@ -166,7 +153,7 @@ install_services() {
   # 接管语义:先清手动态进程,避免 launchd 实例与 nohup 实例抢端口
   stop_ordered all >/dev/null 2>&1 || true
   local rc=0
-  for lbl in app.dsh.apphub.server app.dsh.apphub.engine app.dsh.wanqi-test.server; do
+  for lbl in app.dsh.apphub.server app.dsh.wanqi-test.server; do  # engine 已移出(2026-11-12)
     local plist="$PLIST_DIR/$lbl.plist"
     if [ ! -f "$plist" ]; then
       log "install: ✗ $plist 缺失,该组件跳过"; rc=1; continue
@@ -190,7 +177,7 @@ install_services() {
 }
 uninstall_services() {
   local rc=0
-  for lbl in app.dsh.wanqi-test.server app.dsh.apphub.engine app.dsh.apphub.server; do
+  for lbl in app.dsh.wanqi-test.server app.dsh.apphub.server; do  # engine 已移出(2026-11-12)
     launchctl bootout "gui/$UID_N/$lbl" >/dev/null 2>&1 || true
     if launchctl print "gui/$UID_N/$lbl" >/dev/null 2>&1; then
       log "uninstall: $lbl 仍在(域受限,请在用户 Terminal 重跑)"; rc=1
@@ -212,30 +199,27 @@ run_fg() {
       export PUB_CACHE="$HOME/Code/wanqi/.pub-cache"
       exec "$HOME/dev/flutter/bin/cache/dart-sdk/bin/dart" run bin/apphub.dart --config "$APPDIR/config.json"
       ;;
-    engine)
-      exec "$HOME/.local/bin/dsh" web --host 127.0.0.1 --port 7611 --no-open
-      ;;
-    *) log "run: 仅支持 server|engine"; return 2 ;;
+    *) log "run: 仅支持 server(engine 属 DSH 侧,已移出管理)"; return 2 ;;
   esac
 }
 
 # ---------- 分发 ----------
 ensure_ordered() { # start/restart 的组件=all 时按依赖序
   case "${1:-all}" in
-    all)    start_db && start_server && start_engine && start_test ;;
+    all)    start_db && start_server && start_test ;;
     db)     start_db ;;
     server) start_db >/dev/null 2>&1; start_server ;;
-    engine) start_engine ;;
+    engine) log "engine 属 DSH 侧服务,2026-11-12 起万器不再管理;启停见 ~/dsh/apphub/engine-supervisor.sh"; return 2 ;;
     test)   start_db >/dev/null 2>&1; start_test ;;
-    *) log "未知组件: $1 (db|server|engine|test|all)"; return 2 ;;
+    *) log "未知组件: $1 (db|server|test|all)"; return 2 ;;
   esac
 }
 stop_ordered() {
   case "${1:-all}" in
-    all)    stop_test; stop_engine; stop_server; stop_db ;;
+    all)    stop_test; stop_server; stop_db ;;
     db)     stop_db ;;
     server) stop_server ;;
-    engine) stop_engine ;;
+    engine) log "engine 属 DSH 侧服务,2026-11-12 起万器不再管理"; return 2 ;;
     test)   stop_test ;;
     *) log "未知组件: $1"; return 2 ;;
   esac
