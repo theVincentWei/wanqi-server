@@ -99,11 +99,22 @@ Map<String, Object?> _whitelistedListing(Map<String, Object?> raw) {
 }
 
 class Market {
-  Market(this.cfg, this.db, this.store);
+  /// [backendRunning] 是「本机后端运行态」探针(万器多机语义:同一个 app
+  /// 换一台机器就要重查,答案以当前 server 进程的 provisioner 内存态为准)。
+  /// 缺省恒 false,兼容不接 provisioner 的旧装配。纯加字段不改既有形状,
+  /// 老消费方按未知字段忽略(spec §3)。
+  Market(this.cfg, this.db, this.store,
+      {bool Function(String appId)? backendRunning})
+      : _backendRunning = backendRunning;
 
   final AppConfig cfg;
   final Db db;
   final Store store;
+
+  final bool Function(String appId)? _backendRunning;
+
+  /// 该 app 的后端此刻是否跑在本机(纯前端/未部署/已停止 → false)。
+  bool backendRunning(String appId) => _backendRunning?.call(appId) ?? false;
 
   shelf_router.Router get router {
     final router = shelf_router.Router()
@@ -148,6 +159,10 @@ class Market {
       // autoSync 静默同步(万器扩展):manifest 透传,手机宿主据此后台
       // 静默安装/升级;老容器按未知字段忽略,缺省 false。
       'autoSync': await _appAutoSync(appId),
+      // 声明态:该版本是否带后端(bundle.json backend 段)。手机宿主在
+      // 装/升时把它持久化成本地「依赖后端」标记,换机器后据此判置灰;
+      // 运行态在 /api/v1/apps 的 backendRunning,manifest 不掺运行时。
+      'backend': await _appBackend(appId),
       // Absolute: the Dimina updater fetches this URL, and the Host the client
       // used for the manifest is exactly the host it can fetch the package
       // from (LAN IP, adb reverse loopback, or the ssh tunnel — all work).
@@ -271,6 +286,8 @@ class Market {
         for (final Map<String, Object?> app in apps)
           <String, Object?>{
             ...app,
+            // 运行态:后端此刻是否在本机(多机可用性判定用;纯前端恒 false)。
+            'backendRunning': backendRunning(app['appId'] as String),
             if ((app['iconFile'] as String?)?.isNotEmpty ?? false)
               'iconUrl': _iconUrl(host, app['iconFile']),
           },
@@ -333,6 +350,8 @@ class Market {
       'path': await _appPath(appId),
       'backend': await _appBackend(appId),
       'autoSync': await _appAutoSync(appId),
+      // 运行态:后端此刻是否在本机跑(多机可用性判定用)。
+      'backendRunning': backendRunning(appId),
       'description': description,
       'category': category,
       'versionCode': version?['version_code'],

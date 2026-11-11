@@ -152,9 +152,9 @@ void main() {
     await db.initSchema();
     store = Store(db);
     notifyStore = NotifyStore(db);
-    market = Market(cfg, db, store);
     gateway = Gateway(cfg, db, store);
     provisioner = Provisioner(cfg, db, store, gateway, http.Client());
+    market = Market(cfg, db, store, backendRunning: provisioner.isRunning);
     service = BundleService(cfg, db, store, market, gateway, provisioner);
     await gateway.reload();
   });
@@ -464,5 +464,67 @@ void main() {
         'SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?',
         <Object?>['app_$appId']);
     expect(schemas, isEmpty);
+  });
+
+  test('多机可用性:市场行/详情带 backendRunning 运行态,manifest 带 backend 声明', () async {
+    Future<Map<String, Object?>> marketJson(String path) async =>
+        bodyJson(await market.router
+            .call(shelf.Request('GET', Uri.parse('http://svc.test$path'))));
+    Future<Map<String, Object?>> marketAppRow(String appId_) async {
+      final List<Object?> apps =
+          (await marketJson('/api/v1/apps'))['apps'] as List<Object?>;
+      return apps.firstWhere(
+          (a) => (a as Map<String, Object?>)['appId'] == appId_)
+          as Map<String, Object?>;
+    }
+
+    // ① 先装纯前端 v1:backend=false,backendRunning 恒 false。
+    final shelf.Response v1 =
+        await service.router.call(zipRequest('/api/v1/bundle/install',
+            zipBytes(bundleArchive(code: 1))));
+    expect(v1.statusCode, 200);
+
+    Map<String, Object?> row = await marketAppRow(appId);
+    expect(row['backend'], isFalse);
+    expect(row['backendRunning'], isFalse);
+    Map<String, Object?> detail = await marketJson('/api/v1/apps/$appId');
+    expect(detail['backend'], isFalse);
+    expect(detail['backendRunning'], isFalse);
+    Map<String, Object?> manifest =
+        await marketJson('/apps/$appId/manifest.json');
+    expect(manifest['backend'], isFalse);
+
+    // ② 升级为带后端 v2:声明翻 true,daemon spawn 健康过门 → 运行态 true。
+    final shelf.Response v2 =
+        await service.router.call(zipRequest('/api/v1/bundle/install',
+            zipBytes(bundleArchive(code: 2, backend: true))));
+    expect(v2.statusCode, 200);
+    expect(provisioner.isRunning(appId), isTrue);
+
+    row = await marketAppRow(appId);
+    expect(row['backend'], isTrue);
+    expect(row['backendRunning'], isTrue);
+    detail = await marketJson('/api/v1/apps/$appId');
+    expect(detail['backend'], isTrue);
+    expect(detail['backendRunning'], isTrue);
+    manifest = await marketJson('/apps/$appId/manifest.json');
+    expect(manifest['backend'], isTrue);
+
+    // ③ 停掉 daemon(模拟换机器/后端没起来):声明还在,运行态翻 false。
+    await provisioner.stop(appId);
+    row = await marketAppRow(appId);
+    expect(row['backend'], isTrue);
+    expect(row['backendRunning'], isFalse);
+    detail = await marketJson('/api/v1/apps/$appId');
+    expect(detail['backendRunning'], isFalse);
+
+    // ④ 整包卸载后市场行消失(手机端本地条目→ 服务器查无此行 → 置灰语义)。
+    final shelf.Response remove =
+        await service.router.call(authedRequest('DELETE', '/api/v1/bundle/$appId'));
+    expect(remove.statusCode, 200);
+    final List<Object?> apps =
+        (await marketJson('/api/v1/apps'))['apps'] as List<Object?>;
+    expect(apps.where((a) => (a as Map<String, Object?>)['appId'] == appId),
+        isEmpty);
   });
 }

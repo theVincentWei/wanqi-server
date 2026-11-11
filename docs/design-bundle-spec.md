@@ -107,17 +107,44 @@ sys-monitor.bundle.zip
 { "spec": 1, "appId": "...", "autoSync": true, ... }
 ```
 
-- **语义**:作者声明「这个 app 允许静默同步」。手机宿主(dsh-go)在链路建立/
-  市场目录刷新时,对 autoSync 的 app:没装 → **后台静默装上**(不拉任何界面)+
-  瓷贴自动落位;已装旧版 → **静默升级,跳过容器升级确认弹窗**(发布即确认,
-  用户装包时就同意了)。
+- **语义**(2026-11-11 收敛):`autoSync:true` 的「特权」只剩**未装 → 后台静默
+  装上桌面**(不拉任何界面)+ 瓷贴自动落位;**升级已改全自动**——所有已安装
+  app 只要目录版本更高就直接静默升级,不再看本字段,容器「发现新版本」确认
+  弹窗全量退役(发布即确认;升级告知保留瞬态 Banner + 系统通知)。
 - **缺省 false**;非 bool 值按 false 处理不拒装。逐版本权威:新版 bundle.json
   不写 autoSync → 复位 false。
 - **透传面**:市场行(`/api/v1/apps` 的 `autoSync`)、manifest(`autoSync`)、
   bundle install 响应。
-- **宿主开关**:设置 → 通用 → 静默同步(默认开,自用场景;关闭后退回市场页
-  手动装/升,非 autoSync 包行为不变)。
+- **宿主开关**:设置 → 通用 → 静默同步(默认开,自用场景;关闭 = 全部静默
+  装/升停用,回到市场页手动触发)。
 - **实现**:server(本仓 server/lib/bundle.dart 透传 + apps.auto_sync 列)、
   dsh-go(app/lib/state/auto_sync_state.dart 后台同步 + DiminaPlugin 'sync'
   通道 + open autoUpdate 参数)、dimina(容器 fork,补丁
   `dimina 仓 patches/series/0026`);iOS/Harmony 侧参数对齐后置。
+
+## 10. 平台扩展:多机可用性(2026-11-11,万器)
+
+同一部手机先后连多台机器时的桌面语义。安装发生在手机沙盒(跟机器无关),
+机器只决定「**带后端的小程序**此刻可不可用」。职责划分:版本检测/升级归
+宿主静默同步(§9),应用市场只管浏览/安装/展示面,不参与升级决策——市场
+的「互联网分享/外源拉取」是后续演进,不在本节。
+
+- **声明态 `backend`**(manifest.json 新增,bool):该版本 bundle.json 带
+  `backend` 段。市场行/详情早已有;manifest 补齐是为了手机装/升时把「依赖
+  后端」持久化成本地档案。老客户端按未知字段忽略。
+- **运行态 `backendRunning`**(市场行 `/api/v1/apps` 与详情 `/api/v1/apps/<id>`
+  新增,bool,缺省 false):后端此刻是否跑在「这台」server 进程上——取
+  provisioner `isRunning`(纯内存态;server 重启由 restoreAll 重估)。
+- **客户端消费规则(dsh-go 桌面)**:
+  - 纯离线(`backend:false`)→ 任何机器常驻可用;
+  - `backend:true` → 仅 `backendRunning:true` 可点;false/查不到 → 整块置灰
+    (45%,与免会话 feature 置灰同款),点击提示「在这台机器上不可用(后端
+    未部署)」,**长按删除/卸载不受置灰影响**;
+  - 手机本地持久化已装档案(prefs `hub.installed-minis.v1`):目录里查不到的
+    app 照常上桌面(离线常亮、带后端置灰——宁可灰不可假亮),本机卸载即从
+    档案剔除;切主机 = 目录与运行态全部重查。
+- **实现**:server(lib/market.dart 探针注入 + manifest `backend`;Market
+  构造参数 `backendRunning`,server_runner 接 provisioner.isRunning)、
+  dsh-go(hub_apps_group 档案 + mergeInstalledMinis、hub_desktop_sync 的
+  enabled 与 activeHost 失效、IconTile `onDisabledTap` +
+  delegate `onUnavailableTap`)。

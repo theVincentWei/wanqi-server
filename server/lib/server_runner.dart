@@ -43,11 +43,14 @@ Future<void> runServer(List<String> args) async {
   await db.initSchema();
 
   final Store store = Store(db);
-  final Market market = Market(cfg, db, store);
   final Gateway gateway = Gateway(cfg, db, store);
   final Obs obs = Obs(cfg);
   final AiGateway ai = AiGateway(cfg, db, cfg.engineLaunchUrlFile);
   final Provisioner provisioner = Provisioner(cfg, db, store, gateway, http.Client());
+  // Market 拿 provisioner 的运行态探针,给 /api/v1/apps 行补 backendRunning
+  // (多机可用性:手机桌面据此判断「这台机器上有没有这个后端」)。
+  final Market market =
+      Market(cfg, db, store, backendRunning: provisioner.isRunning);
   final BundleService bundle = BundleService(cfg, db, store, market, gateway, provisioner);
   // 通知系统(契约 dimina-notify-contract v1;推送 v1 = none,纯客户端拉)。
   final Notices notices = Notices(cfg, db, push: buildPushDispatcher(cfg.push.dispatcher));
