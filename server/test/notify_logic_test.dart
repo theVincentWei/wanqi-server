@@ -426,6 +426,38 @@ void main() {
       expect(input.dedupeKey, isNull);
     });
 
+    test('templateId 白名单(§6.4 首装修订):缺省=升级,system-install 放行,白名单外拒', () {
+      const Map<String, Object?> base = <String, Object?>{
+        'appId': 'wx3d8b6f2a9c4e7d15',
+        'title': '记账',
+      };
+      // 缺省 = 升级告知(向后兼容:老宿主不带 templateId,行为不变)。
+      expect(validateHostNotice(base), isNull);
+      expect(parseHostNotice(base).templateId, hostNoticeTemplateId);
+      // 首装告知放行并落进解析结果。
+      final Map<String, Object?> install = <String, Object?>{
+        ...base,
+        'templateId': hostInstallTemplateId,
+        'dedupeKey': 'install-3',
+      };
+      expect(validateHostNotice(install), isNull);
+      final HostNoticeInput input = parseHostNotice(install);
+      expect(input.templateId, hostInstallTemplateId);
+      expect(input.dedupeKey, 'install-3');
+      // 白名单外的值/非字符串:定位到 templateId(47003)。
+      expect(
+        validateHostNotice(<String, Object?>{
+          ...base,
+          'templateId': 'system-uninstall',
+        }),
+        'templateId',
+      );
+      expect(
+        validateHostNotice(<String, Object?>{...base, 'templateId': 7}),
+        'templateId',
+      );
+    });
+
     test('非法逐项定位:非 Map/appId/title/body/page/dedupeKey', () {
       expect(validateHostNotice('nope'), 'body');
       expect(validateHostNotice(<String, Object?>{'title': 't'}), 'appId');

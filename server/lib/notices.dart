@@ -242,6 +242,9 @@ class Notices {
       body: input.body,
       page: input.page,
       dedupeKey: input.dedupeKey,
+      // §6.4 首装修订：宿主可把告知标成 system-install（首装），缺省仍是
+      // system-upgrade；白名单校验在 validateHostNotice 里已挡掉非法值。
+      templateId: input.templateId,
     );
     return _ok(<String, Object?>{'id': id});
   }

@@ -310,10 +310,22 @@ SendDecision decideSend({
 // 宿主上报告知（契约 §3.5 / §6.4 修订：升级完成之类也进收件箱）
 // ---------------------------------------------------------------------------
 
-/// 宿主上报告知的 template_id 固定值：宿主侧事件告知（Bundle 升级完成之类）
-/// 不经模板登记/配额/限流，notify_messages 里以这个固定值落库；宿主点击
-/// 跳转也靠它认出「这是升级告知」。
+/// 宿主上报告知的 template_id 缺省值：宿主侧事件告知（Bundle 升级完成之类）
+/// 不经模板登记/配额/限流，notify_messages 里以固定值落库；宿主点击跳转也
+/// 靠它认出「这是宿主告知、没带 page 就进小程序首页」。
 const String hostNoticeTemplateId = 'system-upgrade';
+
+/// 首装完成告知的 template_id（§6.4 首装修订，2026-11-12）：宿主静默装好
+/// 一个目录里新出现的小程序后上报，语义与升级告知同款（点击进小程序首页），
+/// 只差收件箱/审计里能分清「装上了」和「升级了」。
+const String hostInstallTemplateId = 'system-install';
+
+/// 宿主上报告知允许的 template_id 白名单：body 缺省 templateId = 升级告知；
+/// 白名单外的值按非法 body 拒（47003 argument invalid: templateId）。
+const Set<String> hostNoticeTemplateIds = <String>{
+  hostNoticeTemplateId,
+  hostInstallTemplateId,
+};
 
 /// 宿主上报告知的解析结果（§3.5）。字段就是展示字段：不走模板字段拼装。
 class HostNoticeInput {
@@ -323,6 +335,7 @@ class HostNoticeInput {
     required this.body,
     this.page,
     this.dedupeKey,
+    this.templateId = hostNoticeTemplateId,
   });
 
   final String appId;
@@ -334,6 +347,10 @@ class HostNoticeInput {
 
   /// 幂等键：同 app + 同 key 重复上报只落一条（uk_app_dedupe + INSERT IGNORE）。
   final String? dedupeKey;
+
+  /// 落库用的 template_id：缺省 = 升级告知；宿主可显式标 system-install
+  /// （首装告知）。白名单见 [hostNoticeTemplateIds]，校验在 validateHostNotice。
+  final String templateId;
 }
 
 /// 宿主上报告知的 HTTP body 校验（§3.5）。返回 null 表示合法，否则返回供
@@ -352,20 +369,31 @@ String? validateHostNotice(Object? rawBody) {
   if (dedupeKey != null && (dedupeKey is! String || dedupeKey.isEmpty || dedupeKey.length > 128)) {
     return 'dedupeKey';
   }
+  final Object? templateId = rawBody['templateId'];
+  if (templateId != null &&
+      (templateId is! String || !hostNoticeTemplateIds.contains(templateId))) {
+    return 'templateId';
+  }
   return null;
 }
 
 /// 校验通过后把 body 解析成 store 可用的形状（缺省补齐：body 空、page/dedupeKey
-/// 空 = null）。调用前必须先用 [validateHostNotice] 校验。
+/// 空 = null、templateId 缺省 = 升级告知）。调用前必须先用 [validateHostNotice]
+/// 校验。
 HostNoticeInput parseHostNotice(Object? rawBody) {
   final Map raw = rawBody is Map ? rawBody : const <Object?, Object?>{};
   final Object? page = raw['page'];
   final Object? dedupeKey = raw['dedupeKey'];
+  final Object? templateId = raw['templateId'];
   return HostNoticeInput(
     appId: raw['appId'] as String,
     title: (raw['title'] as String).trim(),
     body: raw['body'] is String ? raw['body'] as String : '',
     page: page is String && page.isNotEmpty ? page : null,
     dedupeKey: dedupeKey is String && dedupeKey.isNotEmpty ? dedupeKey : null,
+    templateId:
+        templateId is String && hostNoticeTemplateIds.contains(templateId)
+            ? templateId
+            : hostNoticeTemplateId,
   );
 }
