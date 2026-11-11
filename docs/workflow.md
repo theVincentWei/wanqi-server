@@ -1,64 +1,50 @@
-# 多仓开发与合入策略(2026-11-11 定稿;同日下午升级为四仓)
+# 多仓开发与合入策略(v2,2026-11-11)
 
-> 四个仓,四种身份,一套节奏。本文是惯例法,不是教程;冲突时以「不变式」节为准。
+> 四个仓,各改各的。本文是惯例法,不是教程;冲突时以「不变式」节为准。
+> **v2 变化**:fork 备份成立(theVincentWei 名下两仓,public)——改动永远发生在对应仓里、主线推自己的 fork;旧的「每次提交追加补丁/catalog 归档」纪律**降级为静态档案**,不再随提交维护。
 
 ## 0. 四仓身份与不变式
 
-| 仓 | 身份 | 上游 | 主线 | 存档形式 |
+| 仓 | 身份 | 远端 | 主线 | 备份 |
 |---|---|---|---|---|
-| **wanqi** | 我们的平台本体:小程序管理框架(开源) | 无(自己的) | `master` 线性 | master 本身就是存档 |
-| **dsh-go-miniprograms** | 小程序源码仓(12 个示例的源码真身 + `dist/` 发布 zip) | 无(自己的) | `main` 线性 | dist/ 发布 zip 随仓 |
-| **dsh-Go** | 手机宿主(AGPL 公开) | 上游 = `ccch1mneyyy/dsh-Go`(项目本体);fork = `theVincentWei/dsh-Go` | `main`(本地线:基线 a75c6cff@#602 + 124 提交,落后上游 ~1250,升级走 merge) | 本仓 `local-series/` + fork push(main + `v1.0.11-local` tag + `upstream` 分支) |
-| **dimina** | 容器 fork(didi/dimina,公开) | 上游 = `didi/dimina`;fork = `theVincentWei/dimina` | `main`(基线 v1.8.1/eef595c + 30 适配提交 + 1 档案提交;上游 tip 已前进 11) | 本仓 `patches/` + fork push(main 强刷为本地线) |
-
-> 2026-11-11 减负:wanqi 不再携带示例与别仓档案——`examples/`(源码快照 + dist)迁 dsh-go-miniprograms,
-> `patches/dimina/` 迁 dimina 仓 `patches/`,`patches/dsh-go-series/` 迁 dsh-Go 仓 `local-series/`。
+| **wanqi** | 小程序管理框架(server/CLI/docs/skill,开源) | 无远端(遗留:开源建仓待拍板) | `master` 线性 | master 本身即存档 |
+| **dsh-go-miniprograms** | 小程序源码仓(源码真身 + 盘上 `dist/`) | 无远端(遗留:建议建 theVincentWei 仓) | `main` 线性 | 本地 git |
+| **dsh-Go** | 手机宿主(AGPL 公开) | origin=`theVincentWei/dsh-Go`(我们的 fork);upstream=`ccch1mneyyy/dsh-Go`(**项目本体**,旧文档误记为用户 fork) | `main` = 基线 a75c6cff@#602 + 124 本地提交(落后上游 ~1250) | push origin(fork main=本地线 + `v1.0.11-local` tag + `upstream` 分支) |
+| **dimina** | 容器 fork(公开) | origin=`theVincentWei/dimina`;upstream=`didi/dimina` | `main` = 基线 v1.8.1 + 30 适配提交 + 1 档案提交(上游 tip 领先 11) | push origin(fork main=本地线,v1.8.1 tag 在历史内) |
 
 不变式:
-1. **开发位置 = 改动的家**:管理框架/文档/skill 在 wanqi;小程序源码与发布 zip 在 dsh-go-miniprograms;手机宿主在 dsh-Go;容器在 dimina。不用软链接、不做跨仓源码镜像。
-2. **补丁是导出格式,不是开发格式**:永远在真实的家里开发,验收后导出存档。
-3. **验收必含归档项**:dimina 新提交 → 追加 dimina 仓 `patches/series` + README 行;dsh-Go 新提交 → 追加 dsh-Go 仓 `local-series/catalog.tsv` 行;漏了不算验收通过。
+1. **开发位置 = 改动的家**:管理框架/文档/skill 在 wanqi;小程序在 dsh-go-miniprograms;宿主在 dsh-Go;容器在 dimina。**到对应仓里改**,不跨仓镜像、不在 wanqi 代改别仓的东西。
+2. **有 fork 的仓,主线前进后推 fork**:`git push origin main`(本地线与上游已分叉,首次/升级后用 `--force`);wanqi 与小程序仓暂无远端。
+3. **合入只许 fast-forward**;共享工作树纪律:**不切分支**——用 `git branch -f <主线> <分支>` 收口,需要改动落在某分支时就直接在那条分支上提交。
+4. **升级 = 对齐上游后强刷 fork**(§2/§3)。
+5. **档案是静态的**:`dimina/patches/`(series 全量 + notify-only)与 `dsh-Go/local-series/catalog.tsv` 不再随提交追加;仅当 dimina 跟上游升级(rebase)时,现场 `git format-patch --binary` 再生全系列做「git am → 树 SHA 对账」安全门(§3),对账过才收口。开源范围已拍板**全公开**(2026-11-11),catalog 三类标注(平台对接/个人 UI/基础设施)降级为历史备注。
 
-## 1. 常规任务节奏(每个特性)
+## 1. 常规节奏(每个特性)
 
 ```
-① 各仓开 feature 分支(或 dimina 直接 commit 本地 main)
-② 开发 + 各自仓的测试/analyze 全绿
-③ 跨仓联动验收(如 autoSync:测试 server E2E + 真机/模拟器行为断言)
-④ 验收通过 → 各主线 fast-forward(wanqi master / dsh-go-miniprograms main / dsh-Go main / dimina main)
-⑤ 归档:dimina 追加 format-patch(--binary)进 dimina 仓 patches/series;dsh-Go 追加 local-series/catalog.tsv 行
-⑥ 特性分支删除;两侧工作树回到干净
+① 到对应对应仓改代码(小改动直接主线提交;大改动开 feature 分支)
+② 该仓测试/analyze 全绿
+③ 跨仓联动验收(涉及 server+容器+宿主时:测试 server :7620 E2E + 真机/模拟器行为断言)
+④ 主线 fast-forward 收口(feature 分支 `git branch -f` 收口后删除)
+⑤ 有 fork 的仓 push origin main(已分叉用 --force)
 ```
 
-- 特性分支允许(大改动/有风险时),但**合入只许 fast-forward**(`--ff-only`);要杂交的历史先在自己的分支理成线性再回来。
-- 共享工作树纪律:**不切分支**——用 `git branch -f <主线> <分支>` 收口(指针操作,不碰工作树),需要改动落在某分支时就直接在那条分支上提交。
+UI 改动铁律不变:写代码前出预览图等用户确认(dsh-go-miniprogram skill §铁律)。
 
 ## 2. dsh-Go:跟上游主线升级
 
-> 修正(2026-11-11):`ccch1mneyyy/dsh-Go` 是**项目本体**(AGPL,v1.0.x release PR 均出自该号),旧文档误记为「用户 fork」;我们的 fork 在 `theVincentWei/dsh-Go`(public),本地 remote 已重排:origin=fork,upstream=本体。
-
-本仓历史**含 32 个 merge,merge 携带真实内容**(实证:线性 am 重放丢冲突解决)——所以:
-
-- **升级方式 = merge,不是 rebase**:`git fetch origin && git merge origin/main`,冲突一次解决,我们的历史(含 merge)原样保留。
-- rebase/线性化只用于**新特性分支内部**(分支可以线性,rebase 上 main 前理直)。
-- **升级后动作**:全量回归(测试 + 真机冒烟)→ `local-series/catalog.tsv` 增量补登 → 树 SHA 抽查(可选:`git format-patch` 再生 + 临时 clone 对账)。
-- **备份(2026-11-11 已做)**:本地 main 已强推为 fork main + 打 `v1.0.11-local` tag(手机在用版本 1.0.11+1),上游线存 fork `upstream` 分支;push 前全量密钥扫描已完成(63 命中均为代码标识符/假值,零真密钥)。本地线与上游已分叉,后续刷 fork main 用 `git push --force origin main`。
+- 本仓历史含 32 个**携带真实内容**的 merge(实证:线性 am 重放丢冲突解决)→ **升级 = merge,不是 rebase**:`git fetch upstream && git merge upstream/main`,冲突一次解决,我们的历史原样保留。
+- 升级后:全量回归(测试 + 真机冒烟)→ `git push --force origin main` 刷 fork(合并含上游历史后,普通 push 亦可)。
+- rebase/线性化只用于新特性分支内部(分支可以线性,合回 main 前理直)。
 
 ## 3. dimina:跟上游 didi/dimina 升级
 
-本仓历史线性(am 重放可逐字节还原,树 SHA 已对账)——所以:
-
-- **升级方式 = rebase**:`git fetch --unshallow origin && git rebase --onto <新上游基线> <旧基线> main`,merge 提交会被丢弃——**这是安全的**(树 SHA 对账已证明内容不依赖它们),但 rebase 后必须跑一次「全系列 git am → 树 SHA 对账」作为安全门。
-- rebase 后:dimina 仓 `patches/series/` 全系列**重新物化**(编号/基线/树 SHA 全部刷新)+ README 更新。
-- **备份(2026-11-11 已做)**:公开 fork = `theVincentWei/dimina`,main 强推为本地线(基线 tag v1.8.1 天然在历史内),上游 tip 存 fork `upstream` 分支;rebase 升级后同样强刷 fork main。
+- 本仓历史线性(am 重放可逐字节还原)→ **升级 = rebase**:`git fetch upstream && git rebase --onto <新基线> v1.8.1 main`(2026-11-11 时点上游 tip b52a516 领先 11 个提交)。
+- rebase 后必须跑安全门:现场 `git format-patch --binary v1.8.1..main -o /tmp/series` → 临时 clone 从 v1.8.1 `git am` 全系列 → `git rev-parse HEAD^{tree}` 与本地 main 树 SHA **逐字节对账**,过闸才收口。
+- 收口后 `git push --force origin main` 刷 fork;`patches/series/` 存档按需刷新(编号/基线/树 SHA 全部刷新 + README 更新)。
 
 ## 4. wanqi 与 dsh-go-miniprograms 自身
 
-- wanqi master 单线直推;开源前执行「历史压缩」(重建干净初始提交,原历史私档保留)——**待用户拍板**。
-- wanqi **不携带任何别仓档案**(2026-11-11 起):示例源码/发布 zip 在 dsh-go-miniprograms,dimina 补丁在其仓 `patches/`,dsh-Go 目录在其仓 `local-series/`。
-- dsh-go-miniprograms:发版 = 改包根 `bundle.json`(code 严格递增)→ dmcc 编译 → zip 落 `dist/`(命名 `<appId>-<code>.zip`),流程见 `~/.dsh/skills/dsh-go-miniprogram`。
-
-## 5. 分类纪律(dsh-Go catalog)
-
-- 每个新提交落 `local-series/catalog.tsv` 时标三类之一:**平台对接**(可随万器公开,待拍板)/ **个人 UI**(永不开源)/ **基础设施**;拿不准按主要目的归并 + 备注理由。
-- **开源范围已拍板(2026-11-11):全公开**——上游本就公开,fork 亦公开;「个人 UI」类提交随 fork 一并公开,catalog 三类标注降级为历史备注。
+- wanqi master 单线直推;开源前「历史压缩」(重建干净初始提交,原历史私档保留)**待用户拍板**,届时建 `theVincentWei/wanqi` 公开仓作为远端。
+- dsh-go-miniprograms:发版 = 改包根 `bundle.json`(code 严格递增)→ dmcc 编译 → zip 落 `dist/`(`.gitignore` 约定产物不入库,盘上供万器取用);建议建远端仓备份(公开/私有待拍板)。
+- wanqi **不携带任何别仓档案**(2026-11-11 减负定稿);日常开发查档:`dimina 仓 patches/`、`dsh-Go 仓 local-series/`。

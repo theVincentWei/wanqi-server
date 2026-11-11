@@ -28,6 +28,7 @@ Dimina 容器(DiminaActivity,独立 task;JitPack com.github.didi.dimina:dimina:1
    桥:app/.../dimina/DiminaPlugin.kt ↔ app/lib/ui/applet/dimina/dimina_host.dart
 ```
 
+- **四仓开发位置(2026-11-11 定,到对应仓里改)**:小程序源码→`~/Code/dsh-go-miniprograms`;容器→`~/Code/dimina`;宿主 App→`~/Code/dsh-Go`;万器框架(server/CLI/docs/skill)→`~/Code/wanqi`。各仓改动各自 commit;dsh-Go/dimina 有公开 fork(`theVincentWei/*`,origin=fork、upstream=本体),主线前进后 push origin(强推语义与升级路径见 `~/Code/wanqi/docs/workflow.md`)。
 - 万器 server 跑在本机(dart bin/apphub.dart + MariaDB):**生产 :7610** 由 launchd 托管(Label `app.dsh.apphub.server`),**测试 :7620**(Label `app.dsh.wanqi-test.server`,独立库 apphub_test + 数据目录 ~/dsh/wanqi-test);AppHub 专属引擎 :7611(Label `app.dsh.apphub.engine`)。重启 DSH/电脑不掉。
 - 真机访问走 SSH 隧道(SshHostLink._ensureAppHubForward 自动带的固定 7610 转发,M4);214 仿真器走 adb reverse + ssh -R。
 - **两套容器别混**:市场 Dimina 包跑 DiminaActivity;引擎侧单文件 HTML 应用跑 AppletScreen(契约 v1,胶囊/返回是 Flutter 浮层)。本技能只管 Dimina 包。
@@ -156,7 +157,7 @@ PUB_CACHE=~/Code/wanqi/.pub-cache ~/dev/flutter/bin/cache/dart-sdk/bin/dart run 
 - 返回/隐藏已配好:`setEnableMultiTask(true)`(DiminaPlugin.kt)是**必须的**,关掉它根页返回会直接销毁整个小程序(SDK 的 hideMiniProgram 在非多任务下走 exitMiniProgram 分支)。
 - SDK 可用 API:`hideMiniProgram(appId)`(保栈隐藏)、`closeMiniProgram`、`setShowCapsule/setCapsuleBackgroundColor/setCapsuleIconColor`(胶囊是 SDK 自绘 MiniProgramCapsuleButton,在 DiminaActivity.kt)。
 - 我们自己的胶囊行为(触摸收起/6s 展开)在 app/lib/ui/applet/applet_capsule.dart(只用于 html 契约容器),移植到 Dimina 侧=改 DiminaActivity 那段 Compose。
-- Dimina 本地适配全量存档:`~/Code/dimina/patches/series/`(27 patches,树 SHA 对账无损,git am 应用法见其 README);dsh-Go 宿主侧同理见 `~/Code/dsh-Go/local-series/`。
+- Dimina 本地适配全量存档:`~/Code/dimina/patches/series/`(27 patches,树 SHA 对账无损,git am 应用法见其 README);dsh-Go 宿主侧同理见 `~/Code/dsh-Go/local-series/`;两目录为**静态档案**,不随提交追加(dimina 升级时现场再生对账,见 workflow.md §3)。
 
 ## 9. 带后端的小程序:backend/ 随包 + server 托管(sys-monitor 范式)
 
