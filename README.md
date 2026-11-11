@@ -98,6 +98,19 @@ appId / 版本对照与 backend 细节见 [docs/pack-and-install.md §6](docs/pa
 完整契约(三层分工、字段三态表 ✅/🔇/↔、九步发送判定、错误码、实现偏差登记):
 [docs/notify-contract.md](docs/notify-contract.md)。
 
+## 把本平台装进你的 DSH
+
+本仓库附带开发工作流 skill:复制到你的 DSH 技能目录即装——
+
+```bash
+cp -r skills/dsh-go-miniprogram ~/.dsh/skills/
+```
+
+装上后,对 DSH 说「写一个小程序上架市场」「改某个小程序再发一版」「调试小程序容器」时,它会自动加载
+万器的小程序全流程(源码 + bundle.json → dmcc 编译 → zip 打包 → `wanqi bundle install` 四命令 →
+真机调试),包括深色适配、3D 选型、音频坑、带后端 Bundle 等实战经验。`wanqi` CLI 与 server 在本仓库
+`server/`,先 `cd server && dart pub get` 再按 README「30 秒快速开始」起服务。
+
 ## 文档
 
 - **打包与安装手册(作者视角)**:[docs/pack-and-install.md](docs/pack-and-install.md)
