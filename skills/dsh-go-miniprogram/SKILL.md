@@ -186,7 +186,7 @@ PUB_CACHE=~/Code/wanqi/.pub-cache ~/dev/flutter/bin/cache/dart-sdk/bin/dart run 
 - zip 里 `bundle.json` 或 `main/` 不在根 → install 门禁直接拒收;漏 bundle.json 也会拒收(不再收旧格式)。
 - `bundle.json` 的 `version.code` 没递增就 upgrade → 409 拒收,现象是「改了没效果」;同版本重发必须先 remove 再 install。
 - 编译报某 API 不存在:Dimina 未实现的 wx.* 会运行时报错,先在真机 vConsole 里确认再写。
-- server 没起/行为异常:生产 `launchctl kickstart -k gui/$(id -u)/app.dsh.apphub.server`、测试 `…app.dsh.wanqi-test.server`、引擎 `…app.dsh.apphub.engine`;检查 `lsof -iTCP:7610 -iTCP:7620 -iTCP:7611 -sTCP:LISTEN`;测试 server 日志 `~/dsh/wanqi-test/wanqi-test-server.log`。
+- server 没起/行为异常:`bash ~/Code/wanqi/server/tool/lifecycle.sh doctor`(按 db→server→engine→test 自动检活拉起;`status` 看健康表、`logs server -n 50` 看日志)。launchd 托管态回归须在用户 Terminal:`launchctl kickstart -k gui/$(id -u)/app.dsh.apphub.server`。设计见 `docs/server-lifecycle.md`。
 - 测试 server :7620 与生产 :7610 完全隔离(独立库 apphub_test + ~/dsh/wanqi-test),新流程先打 :7620 验证再上 :7610;**:7620 只放测试数据**。
 
 ## 11. 3D/重图形场景选型(2026-11-10 二次定档:3D 小游戏默认 game 容器自研引擎,用户拍板)

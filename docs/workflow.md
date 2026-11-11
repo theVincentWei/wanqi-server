@@ -18,6 +18,7 @@
 3. **合入只许 fast-forward**;共享工作树纪律:**不切分支**——用 `git branch -f <主线> <分支>` 收口,需要改动落在某分支时就直接在那条分支上提交。
 4. **升级 = 对齐上游后强刷 fork**(§2/§3)。
 5. **档案是静态的**:`dimina/patches/`(series 全量 + notify-only)与 `dsh-Go/local-series/catalog.tsv` 不再随提交追加;仅当 dimina 跟上游升级(rebase)时,现场 `git format-patch --binary` 再生全系列做「git am → 树 SHA 对账」安全门(§3),对账过才收口。开源范围已拍板**全公开**(2026-11-11),catalog 三类标注(平台对接/个人 UI/基础设施)降级为历史备注。
+6. **动 server 前先 doctor**:`bash ~/Code/wanqi/server/tool/lifecycle.sh doctor` 全绿才继续(gradle 构建、装机、验收前必跑);生命周期操作一律走 lifecycle.sh,launchd 只做看护(设计见 docs/server-lifecycle.md)。
 
 ## 1. 常规节奏(每个特性)
 
