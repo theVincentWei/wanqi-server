@@ -8,6 +8,9 @@
 2. `_read`(已读)无鉴权,与 `_poll`(deviceToken)不对称——建议下轮一行对齐(`_read` 同走 `_deviceAuthorized`)。
 3. 未来启用 deviceToken 时:`GET /notices` 对非 loopback 要求 Bearer,而 dsh-go 消费方无 header——需同步给 apphub_notices.dart/state 加 header(当前两处 config deviceToken 均空,不触发)。
 
+## 基础设施风险(审计遗留)
+- dimina fork(shallow 克隆,本地 16+ 提交含 darkmode 等)从未推送任何自己的远端——补丁只覆盖通知特性,整仓无备份。建议:建私有远端做完整备份,并定上游(didi/dimina)跟进策略。
+
 ## 版本路线(源自 Bundle 规范 §7)
 - v1.1:DB migrations(累积式+幂等白名单)· 后端状态枚举实时回写 · 蓝绿升级 · unpublish/--purge · 并发锁 · journal 对账
 - v1.2:分片分发 · 可复现打包+bundleSha256 · minContainer 强制执行 · tools/capabilities 门禁 · export/import-data
