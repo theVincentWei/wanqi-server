@@ -34,6 +34,9 @@
 git clone <this-repo> && cd wanqi
 git clone <miniprograms-repo>          # dsh-go-miniprograms,与 wanqi 并列放置
 
+# 0. 先体检(等价于 server/tool/lifecycle.sh doctor;不健康会自动按依赖序拉起)
+dart run bin/wanqi.dart service doctor
+
 # 1. 起服务端(默认 :7610;测试建议 :7620)
 cd server && dart pub get
 dart run bin/apphub.dart

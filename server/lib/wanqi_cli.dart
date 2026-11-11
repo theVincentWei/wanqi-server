@@ -33,6 +33,12 @@ Usage: wanqi — Wanqi Bundle CLI
                                      logs/DB/packages (手机端整包卸载的清除勾选)
   wanqi list                         list installed apps
 
+  wanqi service doctor               # 生命周期体检:按 db→server→engine→test 检活+自动拉起
+  wanqi service status [--json]      # 四组件健康表 + 托管形态(launchd/nohup)
+  wanqi service start|stop|restart [db|server|engine|test|all]
+  wanqi service logs <db|server|engine|test> [-n N] [-f]
+                                     (薄封装,委托 server/tool/lifecycle.sh;见 docs/server-lifecycle.md)
+
 Common flags: --server http://127.0.0.1:7620  --key <publisherKey>
 (--key 未给时自动解析:APPHUB_KEY env → 主机 config 文件,无需写在命令串里。)
 ''';
@@ -173,6 +179,10 @@ class WanqiCli {
   Future<int> run(List<String> args, {StringSink? out, StringSink? err}) async {
     final StringSink stdoutSink = out ?? stdout;
     final StringSink stderrSink = err ?? stderr;
+    if (args.isNotEmpty && args.first == 'service') {
+      // 生命周期不走 ApiResult 管道:直接委托 lifecycle.sh 并透传退出码。
+      return _service(args.skip(1).toList(), stdoutSink, stderrSink);
+    }
     try {
       final ApiResult result = await _dispatch(args);
       stdoutSink.writeln(_pretty(result));
@@ -186,6 +196,22 @@ class WanqiCli {
       stderrSink.writeln('wanqi: error: $error');
       return 1;
     }
+  }
+
+  /// `wanqi service …`:生命周期薄封装,委托 tool/lifecycle.sh(设计:docs/server-lifecycle.md)。
+  /// 不走 _dispatch/ApiResult 管道——透传脚本输出与退出码;dart/pub 环境坏掉时,
+  /// 直接 `bash ~/Code/wanqi/server/tool/lifecycle.sh …` 仍是救火通道(脚本本体是地基)。
+  Future<int> _service(List<String> rest, StringSink out, StringSink err) async {
+    final String home = Platform.environment['HOME'] ?? '.';
+    final String script = '$home/Code/wanqi/server/tool/lifecycle.sh';
+    if (!File(script).existsSync()) {
+      err.writeln('wanqi: lifecycle.sh not found at $script');
+      return 66;
+    }
+    out.writeln('[lifecycle] bash $script ${rest.join(' ')}');
+    final proc = await Process.start('bash', <String>[script, ...rest],
+        mode: ProcessStartMode.inheritStdio);
+    return proc.exitCode;
   }
 
   Future<ApiResult> _dispatch(List<String> args) async {

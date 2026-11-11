@@ -39,6 +39,8 @@ server/tool/lifecycle.sh start|stop|restart [db|server|engine|test|all]
 server/tool/lifecycle.sh logs <db|server|engine|test> [-n 行数] [-f]
 ```
 
+> CLI 糖:`wanqi service …`(server/lib/wanqi_cli.dart)是本表的**薄封装**——直接委托本脚本并透传退出码;脚本本体始终是救火地基,不依赖 dart/pub 环境。
+
 实现要点:
 
 - **托管形态判定**:`launchctl print gui/$(id -u)/<label>` 成功 = launchd 态;125/失败静默 = 不可见(不视为错误);再查 nohup 脚本进程 = 手动态;都没有 = 未运行。
