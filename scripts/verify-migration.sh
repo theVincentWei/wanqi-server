@@ -23,7 +23,7 @@ ROUTES_API="${ROUTES_API:-/api/v1/gateway/routes}"
 PKG_BASE="${PKG_BASE:-$SERVER/packages}"
 MANIFEST_T="${MANIFEST_T:-$SERVER/apps/%s/manifest.json}"
 KEY="${KEY:-$(python3 -c "import json;print(json.load(open('server/config.local.json'))['publisherKey'])")}"
-DIST="$ROOT/examples/dist"
+DIST="$HOME/Code/dsh-go-miniprograms/dist"
 TMP="$(mktemp -d /tmp/wanqi-verify.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
 PASS=0; FAIL=0

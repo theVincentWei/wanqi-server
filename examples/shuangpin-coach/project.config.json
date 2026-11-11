@@ -1,7 +1,0 @@
-{
-  "compileType": "miniprogram",
-  "appid": "wx3d8b6f2a9c4e7d15",
-  "projectname": "shuangpin-coach",
-  "setting": { "es6": true, "postcss": true, "minified": true },
-  "libVersion": "3.3.3"
-}

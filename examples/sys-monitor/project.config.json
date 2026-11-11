@@ -1,7 +1,0 @@
-{
-  "compileType": "miniprogram",
-  "appid": "wx8d31a5f0c94b27e6",
-  "projectname": "sys-monitor",
-  "setting": { "es6": true, "postcss": true, "minified": true },
-  "libVersion": "3.3.3"
-}

@@ -1,4 +1,0 @@
-{
-  "pages": ["pages/index/index"],
-  "window": { "navigationBarTitleText": "WebView 3D 基线", "navigationBarBackgroundColor": "#10131a", "navigationBarTextStyle": "white", "backgroundColor": "#10131a" }
-}

@@ -1,7 +1,0 @@
-{
-  "description": "web-view 纯 WebView three.js 性能基线",
-  "compileType": "miniprogram",
-  "appid": "wx9d4e6a2c8b1f7e35",
-  "projectname": "WebView 3D 基线",
-  "setting": { "es6": true, "urlCheck": false }
-}

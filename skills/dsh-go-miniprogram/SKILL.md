@@ -156,7 +156,7 @@ PUB_CACHE=~/Code/wanqi/.pub-cache ~/dev/flutter/bin/cache/dart-sdk/bin/dart run 
 - 返回/隐藏已配好:`setEnableMultiTask(true)`(DiminaPlugin.kt)是**必须的**,关掉它根页返回会直接销毁整个小程序(SDK 的 hideMiniProgram 在非多任务下走 exitMiniProgram 分支)。
 - SDK 可用 API:`hideMiniProgram(appId)`(保栈隐藏)、`closeMiniProgram`、`setShowCapsule/setCapsuleBackgroundColor/setCapsuleIconColor`(胶囊是 SDK 自绘 MiniProgramCapsuleButton,在 DiminaActivity.kt)。
 - 我们自己的胶囊行为(触摸收起/6s 展开)在 app/lib/ui/applet/applet_capsule.dart(只用于 html 契约容器),移植到 Dimina 侧=改 DiminaActivity 那段 Compose。
-- Dimina 本地适配全量存档:`~/Code/wanqi/patches/dimina/series/`(25 patches,树 SHA 对账无损,git am 应用法见其 README);dsh-Go 宿主侧同理见 `patches/dsh-go-series/`。
+- Dimina 本地适配全量存档:`~/Code/dimina/patches/series/`(27 patches,树 SHA 对账无损,git am 应用法见其 README);dsh-Go 宿主侧同理见 `~/Code/dsh-Go/local-series/`。
 
 ## 9. 带后端的小程序:backend/ 随包 + server 托管(sys-monitor 范式)
 
@@ -172,7 +172,7 @@ PUB_CACHE=~/Code/wanqi/.pub-cache ~/dev/flutter/bin/cache/dart-sdk/bin/dart run 
   后端挂 502 / 限速 429,默认 rpm 120(轮询类先算预算:sys-monitor 每 5s 打 stats+processes = 24rpm)。
 - **后端随包 + server 托管(sys-monitor 范式,2026-11-11 起)**:daemon 源码进
   `<项目>/daemon/`,**预编译成 dist 零运行时依赖**(tsconfig.build.json + rewriteRelativeImportExtensions,
-  参考 `examples/sys-monitor/daemon/`),zip 里放 `backend/dist + backend/src + backend/package.json`;
+  参考 `~/Code/dsh-go-miniprograms/sys-monitor/daemon/`),zip 里放 `backend/dist + backend/src + backend/package.json`;
   install 时 server 动态挑空闲口、按 `backend.start` 拉起(注入 `APPHUB_PORT/APPHUB_APP_ID/APPHUB_DB_URL`,
   **daemon 必须读 APPHUB_PORT 且只绑 127.0.0.1**)、打 `backend.health` 到 200 才算装好、崩溃看护自动重启、
   server 重启自动重拉。**不再手写 launchd plist**——sys-monitor 旧的手写托管已退役。

@@ -1,8 +1,0 @@
-/* 音频页基本沿用 app.wxss 全局样式 */
-.src-text {
-  max-width: 420rpx;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 24rpx;
-}

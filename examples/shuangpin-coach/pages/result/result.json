@@ -1,6 +1,0 @@
-{
-  "navigationBarTitleText": "组结果",
-  "usingComponents": {
-    "linechart": "/components/linechart/linechart"
-  }
-}

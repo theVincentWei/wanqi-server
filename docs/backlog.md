@@ -10,8 +10,8 @@
 
 ## 基础设施风险(审计遗留)
 - **dsh-go `git push origin main` 执行前,先做全量历史密钥扫描**:push 到公开 fork 会带全部 120 个提交的历史,其中可能混过配置类改动;扫描工具(git log -p + grep 或 gitleaks)过一遍再推。
-- dimina fork(shallow 克隆,本地 28 个提交:darkmode 全套/音频 API/redirectTo 双层修复/菜单主题/升级框架/通知/TabBar WIP)~~从未推送任何自己的远端~~ **已于 2026-11-11 补丁化存档**:`patches/dimina/series/`(基线 didi/dimina @eef595c,25 patches + 3 merges,树 SHA 对账无损,git am 干跑全过,无密钥泄漏)。自建私有远端做完整备份仍建议——补丁系列是内容备份,不是可推送的远端。
-- dsh-Go 宿主 App(本地 120 提交 = 88 普通 + 32 merge)**已于 2026-11-11 登记分类**:`patches/dsh-go-series/catalog.tsv`(平台对接 55 / 个人 UI 59 / 基础设施 6,一条不落)+ README(基线 a75c6cff、am 不忠实性发现——本仓 merge 携带真实内容,补丁线性重放会丢冲突解决,**正确备份/升级走 git 原生**)。**待用户执行:`git -C ~/Code/dsh-Go push origin main`** 直接备份(origin 是用户自己的 fork);平台类精选补丁物化挂起,等开源范围拍板(从 git 随时可再生)。
+- dimina fork(shallow 克隆,本地 28 个提交:darkmode 全套/音频 API/redirectTo 双层修复/菜单主题/升级框架/通知/TabBar WIP)~~从未推送任何自己的远端~~ **已于 2026-11-11 补丁化存档**:dimina 仓 `patches/series/`(基线 didi/dimina @eef595c,25 patches + 3 merges,树 SHA 对账无损,git am 干跑全过,无密钥泄漏)。自建私有远端做完整备份仍建议——补丁系列是内容备份,不是可推送的远端。
+- dsh-Go 宿主 App(本地 120 提交 = 88 普通 + 32 merge)**已于 2026-11-11 登记分类**:dsh-Go 仓 `local-series/catalog.tsv`(平台对接 55 / 个人 UI 59 / 基础设施 6,一条不落)+ README(基线 a75c6cff、am 不忠实性发现——本仓 merge 携带真实内容,补丁线性重放会丢冲突解决,**正确备份/升级走 git 原生**)。**待用户执行:`git -C ~/Code/dsh-Go push origin main`** 直接备份(origin 是用户自己的 fork);平台类精选补丁物化挂起,等开源范围拍板(从 git 随时可再生)。
 
 ## 版本路线(源自 Bundle 规范 §7)
 - v1.1:DB migrations(累积式+幂等白名单)· 后端状态枚举实时回写 · 蓝绿升级 · unpublish/--purge · 并发锁 · journal 对账

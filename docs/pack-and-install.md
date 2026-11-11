@@ -61,7 +61,7 @@
 
 ### 3.1 纯前端应用(本仓 11 个示例的形态)
 
-1. 写好/改完源码(`examples/<pkg>/`)。
+1. 写好/改完源码(`~/Code/dsh-go-miniprograms/<pkg>/`)。
 2. DMCC 编译出 `main/`(产物:压平的 `*_xxx.js/.css`、`app-config.json`、`logic.js` 等)。
 3. 在源码目录放一份 `bundle.json`(本仓每包已放,作为随源码维护的清单)。
 4. 组装 zip:
@@ -85,23 +85,23 @@ EOF
 
 在 3.1 基础上,把后端做成 `backend/` 加进 zip。本仓 `sys-monitor` 的做法(可抄):
 
-- 后端源码在 `examples/sys-monitor/daemon/`,TypeScript、裸 `node:http`、**零第三方运行时依赖**;
+- 后端源码在 `~/Code/dsh-go-miniprograms/sys-monitor/daemon/`,TypeScript、裸 `node:http`、**零第三方运行时依赖**;
 - 预编译:`./node_modules/.bin/tsc -p tsconfig.build.json` → `dist/`(tsconfig.build.json 用 `rewriteRelativeImportExtensions` 把 `.ts` 后缀导入重写为 `.js`,产物零依赖、`node >= 22` 直接跑);
 - zip 里放 `backend/dist`(产物)+ `backend/src`(源码)+ `backend/package.json`;因为零运行时依赖,**不需要** node_modules 随包;
 - `backend.json` 段:`"start": "node dist/main.js"`、`"health": "/healthz"`、`"gateway": ["/"]`。
 
 ### 3.3 从现有发布 zip 快速补 bundle.json(迁移场景)
 
-老包(只有 `main/`)想补成 Bundle,不必重编译——取现有 zip 注入 `bundle.json` 即可。本仓 12 个发布 zip 就是这么来的(`examples/dist/`):生产 zip 原样解出 → 注入对应 `bundle.json` → sys-monitor 追加 `backend/` → 重打包。
+老包(只有 `main/`)想补成 Bundle,不必重编译——取现有 zip 注入 `bundle.json` 即可。本仓 12 个发布 zip 就是这么来的(`~/Code/dsh-go-miniprograms/dist/`):生产 zip 原样解出 → 注入对应 `bundle.json` → sys-monitor 追加 `backend/` → 重打包。
 
 ## 4. 安装与生命周期(wanqi CLI)
 
 ```bash
 # 安装(校验 → 登记市场 → 解包 backend → 路由注册)
-wanqi bundle install examples/dist/wx5b8e2f4a9c1d7e60-10.zip
+wanqi bundle install ~/Code/dsh-go-miniprograms/dist/wx5b8e2f4a9c1d7e60-10.zip
 
 # 升级(停旧 → 换目录,旧版留作 previous → 起新 → health → 更新路由;失败自动退回 previous)
-wanqi bundle upgrade examples/dist/wx5b8e2f4a9c1d7e60-11.zip
+wanqi bundle upgrade ~/Code/dsh-go-miniprograms/dist/wx5b8e2f4a9c1d7e60-11.zip
 
 # 回滚(current 指回 previous → 重启 → 重注册路由)
 wanqi bundle rollback <appId>
@@ -122,9 +122,9 @@ install 校验:① `main/` + `bundle.json` 存在;② `appId` 与包内一致;�
 
 ## 6. 本仓 12 个示例对照表
 
-维护 `examples/` 时以此为准(appId 与 `project.config.json` 强制一致;版本 = 重发基线):
+维护 `~/Code/dsh-go-miniprograms/` 时以此为准(appId 与 `project.config.json` 强制一致;版本 = 重发基线):
 
-| examples/ 目录 | appId | 名称 | code | version | frontend.entry | backend |
+| ~/Code/dsh-go-miniprograms/ 目录 | appId | 名称 | code | version | frontend.entry | backend |
 |---|---|---|---|---|---|---|
 | flappy-bird | `wx5b8e2f4a9c1d7e60` | Flappy Bird | 10 | 1.1.6 | `game` | – |
 | glm-quota | `wx2f8a4c6e1d3b5a79` | GLM用量 | 14 | 1.2.5 | `pages/index/index` | – |
@@ -139,9 +139,9 @@ install 校验:① `main/` + `bundle.json` 存在;② `appId` 与包内一致;�
 | road-hop | `wx5f8a2d7c9e1b4f30` | 过马路 | 2 | 1.0.0 | `game` | – |
 | audio-test | `wx3a7f2c9e1b8d4f56` | 音频验收 | 1 | 1.0.0 | `pages/audio/audio` | – |
 
-- `examples/dist/` 是上表的发布产物(`<appId>-<code>.zip`),`main/` 在根 + `bundle.json`(sys-monitor 另有 `backend/`)。
+- `~/Code/dsh-go-miniprograms/dist/` 是上表的发布产物(`<appId>-<code>.zip`),`main/` 在根 + `bundle.json`(sys-monitor 另有 `backend/`)。
 - 唯一带 backend 的是 sys-monitor:daemon 入口 `daemon/src/main.ts`,读 `APPHUB_PORT`(优先)绑 `127.0.0.1`,`GET /healthz` 免鉴权恒 200。双拼教练虽留有 `daemon/` 目录但**未使用**,不写 backend 段。
-- 改了某包:源码目录里同步改 `bundle.json` 的版本号,按 §3 重新产出 zip 到 `examples/dist/`。
+- 改了某包:源码目录里同步改 `bundle.json` 的版本号,按 §3 重新产出 zip 到 `~/Code/dsh-go-miniprograms/dist/`。
 
 ## 7. 常见坑
 
