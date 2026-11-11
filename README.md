@@ -51,8 +51,11 @@ curl -s http://127.0.0.1:7620/api/v1/apps | head
 装全局命令(可选;之后任何目录直接 `wanqi service doctor` / `wanqi bundle install …`):
 
 ```bash
-cp server/tool/wanqi ~/.local/bin/wanqi && chmod +x ~/.local/bin/wanqi
+bash server/tool/install-cli.sh   # 自动探测 repo/dart 并生成 ~/.local/bin/wanqi
 ```
+
+> 安装器会把本机路径烙进命令(仍可用 `WANQI_REPO` / `DART_BIN` 环境变量覆盖);
+> dart 不可用时 `wanqi service …` 自动降级走 `server/tool/lifecycle.sh`(应急后门)。
 
 带后端的示例(sys-monitor)会自动:解包 `backend/` → 动态端口拉起 → 打 `/healthz` 到 200 → 按网关前缀注册路由;server 重启后自动重拉。四命令(均不碰 `data/logs/DB`):
 
