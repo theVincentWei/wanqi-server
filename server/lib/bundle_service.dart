@@ -342,31 +342,85 @@ class BundleService {
     });
   }
 
-  /// DELETE /api/v1/bundle/<appId> — §6 remove: stop the process, de-register
-  /// routes, drop code dirs and market rows. data/, logs/ and the per-app DB
-  /// schema are preserved so reinstalling the same bundle picks up where it
-  /// left off (and the version gate starts fresh — remove+install keeps
+  /// DELETE /api/v1/bundle/<appId>[?purge=1] — §6 remove: stop the process,
+  /// de-register routes, drop code dirs and market rows; data/, logs/ and the
+  /// per-app DB schema are preserved so reinstalling picks up where it left
+  /// off (and the version gate starts fresh — remove+install keeps
   /// versionCode).
+  ///
+  /// `?purge=1`(手机端卸载接整包语义,§6 用户勾选「同时清除主机数据」)在
+  /// 保留集之外追加清空:**DROP schema + 删账号、data/logs 整目录、packages
+  /// 里的 zip/icon/shots 分片、app_tokens、该 app 的通知行**(模板/订阅/
+  /// 通知对象/应用级开关)。purge 闭集到此为止——install_events 与 audit_log
+  /// 历史保留。各步 best-effort,任一残留不阻断卸载主流程。
   Future<shelf.Response> _remove(shelf.Request request, String appId) async {
     if (!_publisher(request)) return _err(401, 'unauthorized');
     if (!isValidAppId(appId)) return _err(400, 'invalid appId');
     if (await store.latestVersion(appId) == null) {
       return _err(404, 'no such app');
     }
+    final String purgeRaw = request.url.queryParameters['purge'] ?? '';
+    final bool purge = purgeRaw == '1' || purgeRaw == 'true';
     await provisioner.stop(appId);
 
     final BackendPaths paths = _paths(appId);
     final bool hadData = paths.exists;
-    await removeBackendDirs(paths);
+    int packageFiles = 0;
+    bool schemaDropped = false;
+    if (purge) {
+      // data/logs 与代码目录一起清(整包语义:用户显式勾选了清除主机数据)。
+      if (paths.exists) {
+        try {
+          await Directory(paths.root)
+              .delete(recursive: true)
+              .timeout(const Duration(seconds: 30));
+        } catch (error) {
+          stdout.writeln('bundle: purge delete ${paths.root} failed: $error');
+        }
+      }
+      // packages/ 分片与 icon/shots:<appId>-<code>.zip、-icon.png、-shot-N.png
+      try {
+        final Directory packages = Directory(cfg.packagesDir);
+        if (await packages.exists()) {
+          await for (final FileSystemEntity entry in packages.list()) {
+            if (p.basename(entry.path).startsWith('$appId-')) {
+              await entry.delete();
+              packageFiles += 1;
+            }
+          }
+        }
+      } catch (error) {
+        stdout.writeln('bundle: purge packages $appId failed: $error');
+      }
+      schemaDropped = await store.dropAppDb(appId);
+      await store.purgeAppTokens(appId);
+      await store.purgeNotifyRows(appId);
+      await db.audit('bundle', 'bundle.remove',
+          '$appId purge=true (schema=$schemaDropped packageFiles=$packageFiles)');
+    }
 
+    // 公共清理(默认与 purge 共用):停后端已做、撤路由、删代码目录与市场行。
+    if (!purge) {
+      await removeBackendDirs(paths);
+    }
     await store.deleteRoutesForApp(appId);
     await gateway.reload();
     await store.deleteApp(appId);
+    if (purge) {
+      return _json(<String, Object?>{
+        'appId': appId,
+        'removed': true,
+        'purged': true,
+        'schemaDropped': schemaDropped,
+        'packageFilesDeleted': packageFiles,
+      });
+    }
     await db.audit('bundle', 'bundle.remove',
         '$appId (data/logs/DB kept: $hadData)');
     return _json(<String, Object?>{
       'appId': appId,
       'removed': true,
+      'purged': false,
       'dataKept': hadData,
     });
   }

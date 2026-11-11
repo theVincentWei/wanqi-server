@@ -277,4 +277,37 @@ class Store {
       return null;
     }
   }
+
+  /// --purge(手机端卸载接整包语义,2026-11-11):DROP schema + 删账号。
+  /// 全程 best-effort——schema 不存在/无权限时静默跳过(purge 是尽力清空,
+  /// 不让残留阻断卸载主流程)。返回是否执行了 DROP。
+  Future<bool> dropAppDb(String appId) async {
+    final String schema = 'app_$appId';
+    final String user = 'app_$appId';
+    try {
+      await db.exec('DROP DATABASE IF EXISTS `$schema`');
+      try {
+        await db.exec('DROP USER IF EXISTS `$user`@`localhost`');
+      } catch (_) {
+        // 账号可能从未发放过(纯前端 app 也会走 provision,但老库未必)。
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// --purge:清该 app 的 app_tokens 行(发放过的发送凭据一并作废)。
+  Future<void> purgeAppTokens(String appId) async {
+    await db.exec('DELETE FROM app_tokens WHERE app_id = ?', [appId]);
+  }
+
+  /// --purge:清该 app 的通知行(模板/订阅配额/通知对象/应用级开关)。
+  /// global 开关与 install_events 历史保留(闭集定义,purge 不出此范围)。
+  Future<void> purgeNotifyRows(String appId) async {
+    await db.exec('DELETE FROM notify_templates WHERE app_id = ?', [appId]);
+    await db.exec('DELETE FROM notify_subscriptions WHERE app_id = ?', [appId]);
+    await db.exec('DELETE FROM notify_messages WHERE app_id = ?', [appId]);
+    await db.exec("DELETE FROM notify_prefs WHERE scope = ?", ['app:$appId']);
+  }
 }

@@ -14,6 +14,8 @@ import 'package:apphub/config.dart';
 import 'package:apphub/db.dart';
 import 'package:apphub/gateway.dart';
 import 'package:apphub/market.dart';
+import 'package:apphub/notify_logic.dart' show templateIdFor;
+import 'package:apphub/notify_store.dart' show NotifyStore;
 import 'package:apphub/provisioner.dart';
 import 'package:apphub/store.dart';
 import 'package:archive/archive.dart';
@@ -99,6 +101,7 @@ void main() {
   late Directory backendsDir;
   late Db db;
   late Store store;
+  late NotifyStore notifyStore;
   late Market market;
   late Gateway gateway;
   late Provisioner provisioner;
@@ -148,6 +151,7 @@ void main() {
     await db.connect();
     await db.initSchema();
     store = Store(db);
+    notifyStore = NotifyStore(db);
     market = Market(cfg, db, store);
     gateway = Gateway(cfg, db, store);
     provisioner = Provisioner(cfg, db, store, gateway, http.Client());
@@ -408,6 +412,7 @@ void main() {
     final shelf.Response remove =
         await service.router.call(authedRequest('DELETE', '/api/v1/bundle/$appId'));
     expect(remove.statusCode, 200);
+    expect((await bodyJson(remove))['purged'], isFalse);
     expect(provisioner.isRunning(appId), isFalse);
     expect(await store.latestVersion(appId), isNull);
     expect(await store.listRoutes(), isEmpty);
@@ -417,5 +422,47 @@ void main() {
     final shelf.Response reinstall = await service.router.call(zipRequest(
         '/api/v1/bundle/install', zipBytes(bundleArchive(code: 1, backend: true))));
     expect(reinstall.statusCode, 200);
+  });
+
+  test('remove --purge → data/logs/DB/packages/tokens/notify 全清(闭集)', () async {
+    await service.router.call(zipRequest(
+        '/api/v1/bundle/install', zipBytes(bundleArchive(code: 1, backend: true))));
+    // 种下 purge 闭集内的各类残留:app token、通知模板/订阅/通知对象/应用级开关。
+    final String token = await notifyStore.issueToken(appId);
+    expect(await notifyStore.tokenBelongsTo(token, appId), isTrue);
+    await notifyStore.registerTemplate(appId, '订单状态', const <Map<String, Object?>>[]);
+    await notifyStore.applyConsent(appId, templateIdFor(appId, '订单状态'), 'accept');
+    final File dataMarker =
+        File(p.join(backendsDir.path, appId, 'data', 'state.json'));
+    await dataMarker.writeAsString('{"hp":100}');
+
+    final shelf.Response remove = await service.router
+        .call(authedRequest('DELETE', '/api/v1/bundle/$appId?purge=1'));
+    expect(remove.statusCode, 200);
+    final Map<String, Object?> body = await bodyJson(remove);
+    expect(body['purged'], isTrue);
+    expect(body['schemaDropped'], isTrue);
+    expect(body['packageFilesDeleted'], greaterThanOrEqualTo(1));
+
+    // 市场面全清
+    expect(await store.latestVersion(appId), isNull);
+    expect(
+        (await store.listRoutes()).where((x) => x['appId'] == appId), isEmpty);
+    // token / 通知闭集全清
+    expect(await notifyStore.tokenBelongsTo(token, appId), isFalse);
+    expect(await notifyStore.findTemplate(appId, templateIdFor(appId, '订单状态')), isNull);
+    // data/logs 整目录消失(purge 与默认保留的分界)
+    expect(Directory(p.join(backendsDir.path, appId)).existsSync(), isFalse);
+    // packages 分片消失
+    expect(
+        Directory(cfg.packagesDir)
+            .listSync()
+            .where((e) => p.basename(e.path).startsWith(appId)),
+        isEmpty);
+    // schema 已 DROP
+    final List<Map<String, Object?>> schemas = await db.q(
+        'SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?',
+        <Object?>['app_$appId']);
+    expect(schemas, isEmpty);
   });
 }

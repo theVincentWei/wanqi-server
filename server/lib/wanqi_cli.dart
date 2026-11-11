@@ -4,12 +4,15 @@
 ///
 ///   wanqi bundle install <zip>     gate → market row → unpack backend/ → routes
 ///   wanqi bundle upgrade <zip>     same endpoint; server enforces versionCode ↑
-///   wanqi bundle rollback --app <id>   current/ ↔ previous/, re-register routes
-///   wanqi bundle remove --app <id>     uninstall; data/logs/DB are kept
+///   wanqi bundle rollback --app <id>   roll the whole bundle back to the previous
+///                                      version (market row + backend code)
+///   wanqi bundle remove --app <id> [--purge]
+///                                  uninstall; --purge wipes host data too
+///                                  (手机端整包卸载的清除勾选,见 spec §6)
 ///   wanqi list                     the market listing
 ///
 /// Common flags: --server http://127.0.0.1:7620  --key <publisherKey>
-/// (APPHUB_KEY env is the default key.)
+/// (--key 缺省自动解析:APPHUB_KEY env → 主机 config 文件,命令串无需出现密钥。)
 library;
 
 import 'dart:convert';
@@ -25,10 +28,13 @@ Usage: wanqi — Wanqi Bundle CLI
   wanqi bundle upgrade <zip>         upgrade (version.code must strictly increase)
   wanqi bundle rollback --app <id>   roll the whole bundle back to the previous
                                      version (market row + backend code)
-  wanqi bundle remove --app <id>     uninstall (data/logs/DB are kept)
+  wanqi bundle remove --app <id> [--purge]
+                                     uninstall; --purge also wipes host data/
+                                     logs/DB/packages (手机端整包卸载的清除勾选)
   wanqi list                         list installed apps
 
 Common flags: --server http://127.0.0.1:7620  --key <publisherKey>
+(--key 未给时自动解析:APPHUB_KEY env → 主机 config 文件,无需写在命令串里。)
 ''';
 
 /// Thrown for anything usage-level: prints a message + usage, exit code 64.
@@ -56,7 +62,8 @@ class ApiResult {
 abstract class WanqiApi {
   Future<ApiResult> install(String server, String key, List<int> zipBytes);
   Future<ApiResult> rollback(String server, String key, String appId);
-  Future<ApiResult> remove(String server, String key, String appId);
+  Future<ApiResult> remove(String server, String key, String appId,
+      {bool purge = false});
   Future<ApiResult> list(String server, String key);
 }
 
@@ -94,9 +101,11 @@ class HttpWanqiApi implements WanqiApi {
   }
 
   @override
-  Future<ApiResult> remove(String server, String key, String appId) {
-    return _run((client) => client
-        .delete(Uri.parse('$server/api/v1/bundle/$appId'), headers: _headers(key)));
+  Future<ApiResult> remove(String server, String key, String appId,
+      {bool purge = false}) {
+    return _run((client) => client.delete(
+        Uri.parse('$server/api/v1/bundle/$appId${purge ? '?purge=1' : ''}'),
+        headers: _headers(key)));
   }
 
   @override
@@ -111,14 +120,53 @@ class HttpWanqiApi implements WanqiApi {
 }
 
 class WanqiCli {
-  WanqiCli({WanqiApi? api, String? defaultServer, String? envKey})
+  WanqiCli({WanqiApi? api, String? defaultServer, String? envKey, String? home, String? cwd})
       : api = api ?? HttpWanqiApi(),
         defaultServer = defaultServer ?? 'http://127.0.0.1:7620',
-        envKey = envKey ?? Platform.environment['APPHUB_KEY'] ?? '';
+        envKey = envKey ?? Platform.environment['APPHUB_KEY'] ?? '',
+        home = home ?? Platform.environment['HOME'],
+        cwd = cwd ?? Directory.current.path;
 
   final WanqiApi api;
   final String defaultServer;
   final String envKey;
+
+  /// 主机 config 解析用(测试可注入,生产走真实环境)。
+  final String? home;
+  final String? cwd;
+
+  /// --key 未显式给出时的解析顺序:APPHUB_KEY env → 主机 config 文件
+  /// (cwd/config.local.json → ~/Code/wanqi/server/config.local.json →
+  /// ~/dsh/apphub/config.json)。手机端卸载经引擎命令通道在主机执行本 CLI,
+  /// 密钥因此从主机 config 默认读取,命令串不出现密钥(task-11)。
+  String resolveKey({String? explicit}) {
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    if (envKey.isNotEmpty) return envKey;
+    final String homeDir = home ?? '.';
+    for (final String path in <String>[
+      '$cwd/config.local.json',
+      '$homeDir/Code/wanqi/server/config.local.json',
+      '$homeDir/dsh/apphub/config.json',
+    ]) {
+      final String? key = publisherKeyFromFile(path);
+      if (key != null) return key;
+    }
+    return '';
+  }
+
+  /// 从一个 config JSON 读 publisherKey;不存在/坏 JSON → null。
+  static String? publisherKeyFromFile(String path) {
+    try {
+      final Object? decoded = jsonDecode(File(path).readAsStringSync());
+      if (decoded is Map) {
+        final Object? key = decoded['publisherKey'];
+        if (key is String && key.isNotEmpty) return key;
+      }
+    } catch (_) {
+      // 缺文件/不可读 → 尝试下一个候选。
+    }
+    return null;
+  }
 
   /// Runs one invocation; returns the process exit code. [out]/[err] default
   /// to the process streams; tests pass capturing sinks.
@@ -149,7 +197,8 @@ class WanqiCli {
         return _bundle(rest);
       case 'list':
         final ArgResults parsed = _commonParser().parse(rest);
-        return api.list(parsed['server'] as String, parsed['key'] as String);
+        return api.list(
+            parsed['server'] as String, resolveKey(explicit: parsed['key'] as String?));
       case '':
         throw WanqiUsageException('a command is required');
       default:
@@ -159,7 +208,7 @@ class WanqiCli {
 
   ArgParser _commonParser() => ArgParser()
     ..addOption('server', defaultsTo: defaultServer)
-    ..addOption('key', defaultsTo: envKey);
+    ..addOption('key', defaultsTo: '');
 
   Future<ApiResult> _bundle(List<String> rest) async {
     if (rest.isEmpty) {
@@ -167,7 +216,9 @@ class WanqiCli {
           'bundle needs a subcommand: install | upgrade | rollback | remove');
     }
     final String sub = rest.first;
-    final ArgParser parser = _commonParser()..addOption('app');
+    final ArgParser parser = _commonParser()
+      ..addOption('app')
+      ..addFlag('purge', defaultsTo: false, help: 'remove 同时清除主机 data/logs/DB/packages(整包语义的清除勾选)');
     final ArgResults parsed;
     try {
       parsed = parser.parse(rest.skip(1).toList());
@@ -175,7 +226,7 @@ class WanqiCli {
       throw WanqiUsageException(error.message);
     }
     final String server = parsed['server'] as String;
-    final String key = parsed['key'] as String;
+    final String key = resolveKey(explicit: parsed['key'] as String?);
 
     switch (sub) {
       case 'install':
@@ -193,14 +244,17 @@ class WanqiCli {
         }
         return api.install(server, key, await zip.readAsBytes());
       case 'rollback':
+        final String? appId = parsed['app'] as String?;
+        if (appId == null || appId.isEmpty) {
+          throw WanqiUsageException('$sub needs --app <id>');
+        }
+        return api.rollback(server, key, appId);
       case 'remove':
         final String? appId = parsed['app'] as String?;
         if (appId == null || appId.isEmpty) {
           throw WanqiUsageException('$sub needs --app <id>');
         }
-        return sub == 'rollback'
-            ? api.rollback(server, key, appId)
-            : api.remove(server, key, appId);
+        return api.remove(server, key, appId, purge: parsed['purge'] as bool? ?? false);
       default:
         throw WanqiUsageException('unknown bundle subcommand "$sub"');
     }

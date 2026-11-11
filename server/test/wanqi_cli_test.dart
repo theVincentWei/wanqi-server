@@ -30,13 +30,14 @@ class _Sink implements StringSink {
 }
 
 class _Call {
-  _Call(this.kind, this.server, this.key, [this.appId, this.zipBytes]);
+  _Call(this.kind, this.server, this.key, [this.appId, this.zipBytes, this.purge = false]);
 
   final String kind;
   final String server;
   final String key;
   final String? appId;
   final List<int>? zipBytes;
+  final bool purge;
 }
 
 class _FakeApi implements WanqiApi {
@@ -58,8 +59,9 @@ class _FakeApi implements WanqiApi {
       _result(_Call('rollback', server, key, appId));
 
   @override
-  Future<ApiResult> remove(String server, String key, String appId) async =>
-      _result(_Call('remove', server, key, appId));
+  Future<ApiResult> remove(String server, String key, String appId,
+      {bool purge = false}) async =>
+      _result(_Call('remove', server, key, appId, null, purge));
 
   @override
   Future<ApiResult> list(String server, String key) async =>
@@ -183,12 +185,82 @@ void main() {
       expect(code, 0);
       expect(api.calls.single.kind, 'remove');
       expect(api.calls.single.appId, 'wxabc');
+      expect(api.calls.single.purge, isFalse);
+    });
+
+    test('remove --purge 传播到 api 调用(整包语义清除勾选)', () async {
+      final int code = await cli.run(
+          <String>['bundle', 'remove', '--app', 'wxabc', '--purge'],
+          out: _Sink(), err: _Sink());
+      expect(code, 0);
+      expect(api.calls.single.kind, 'remove');
+      expect(api.calls.single.purge, isTrue);
+    });
+
+    test('rollback 与 remove 不再混用同一分支(remove 缺 --app 报 usage)', () async {
+      final int code = await cli.run(<String>['bundle', 'remove'], out: _Sink(), err: _Sink());
+      expect(code, 64);
     });
 
     test('list hits /api/v1/apps via the api client', () async {
       final int code = await cli.run(<String>['list'], out: _Sink(), err: _Sink());
       expect(code, 0);
       expect(api.calls.single.kind, 'list');
+    });
+  });
+
+  group('resolveKey(--key 缺省从主机 config 读取,task-11)', () {
+    test('显式 --key 最优先', () {
+      expect(cli.resolveKey(explicit: 'explicit-key'), 'explicit-key');
+    });
+
+    test('env 次之', () {
+      expect(cli.resolveKey(), 'test-key');
+    });
+
+    test('config 文件兜底:cwd/config.local.json', () {
+      final Directory dir = Directory.systemTemp.createTempSync('wanqi-key-');
+      File('${dir.path}/config.local.json')
+          .writeAsStringSync('{"publisherKey":"from-config"}');
+      try {
+        final WanqiCli local = WanqiCli(
+            api: api, defaultServer: 'http://x', envKey: '', home: '/nohome', cwd: dir.path);
+        expect(local.resolveKey(), 'from-config');
+      } finally {
+        dir.deleteSync(recursive: true);
+      }
+    });
+
+    test('config 兜底顺序:home 下 wanqi server config 次于 cwd,先于 dsh/apphub', () {
+      final Directory home = Directory.systemTemp.createTempSync('wanqi-home-');
+      Directory('${home.path}/Code/wanqi/server').createSync(recursive: true);
+      File('${home.path}/Code/wanqi/server/config.local.json')
+          .writeAsStringSync('{"publisherKey":"from-repo"}');
+      try {
+        final WanqiCli local = WanqiCli(
+            api: api, defaultServer: 'http://x', envKey: '', home: home.path, cwd: '/nope');
+        expect(local.resolveKey(), 'from-repo');
+      } finally {
+        home.deleteSync(recursive: true);
+      }
+    });
+
+    test('全链无 key → 空串(服务端 401,由调用方看错误)', () {
+      final WanqiCli local = WanqiCli(
+          api: api, defaultServer: 'http://x', envKey: '', home: '/nohome', cwd: '/nope');
+      expect(local.resolveKey(), '');
+    });
+
+    test('坏 JSON config 被跳过不抛', () {
+      final Directory dir = Directory.systemTemp.createTempSync('wanqi-key-bad-');
+      File('${dir.path}/config.local.json').writeAsStringSync('{not json');
+      try {
+        final WanqiCli local = WanqiCli(
+            api: api, defaultServer: 'http://x', envKey: '', home: '/nohome', cwd: dir.path);
+        expect(local.resolveKey(), '');
+      } finally {
+        dir.deleteSync(recursive: true);
+      }
     });
   });
 
