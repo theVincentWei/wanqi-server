@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# 万器 CLI 宿主 wrapper:手机端「引擎命令通道」经它执行 bundle 生命周期命令
+# (task-11 手机端卸载接整包语义)。密钥由 CLI 从主机 config 自动解析
+# (APPHUB_KEY env → config 文件),命令串不出现密钥。
+#
+# 手机端命令形态(经引擎终端通道在主机 shell 执行):
+#   $HOME/Code/wanqi/server/bin/wanqi bundle remove --app <appId> [--purge]
+set -euo pipefail
+
+WANQI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DART="${DART:-$HOME/dev/flutter/bin/cache/dart-sdk/bin/dart}"
+export PUB_CACHE="${PUB_CACHE:-$HOME/Code/wanqi/.pub-cache}"
+
+cd "$WANQI_DIR/server"
+exec "$DART" run bin/wanqi.dart "$@"
