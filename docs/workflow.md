@@ -8,8 +8,8 @@
 |---|---|---|---|---|
 | **wanqi** | 我们的平台本体:小程序管理框架(开源) | 无(自己的) | `master` 线性 | master 本身就是存档 |
 | **dsh-go-miniprograms** | 小程序源码仓(12 个示例的源码真身 + `dist/` 发布 zip) | 无(自己的) | `main` 线性 | dist/ 发布 zip 随仓 |
-| **dsh-Go** | 手机宿主(闭源,非我们所有) | ccch1mneyyy/dsh-Go(用户 fork,走 PR 主线) | `main`(本地线,领先 origin/main 120+) | **本仓 `local-series/`** 分类目录(+按需再生) |
-| **dimina** | 容器 fork(上游 didi/dimina 本体不开源) | didi/dimina | `main`(本地线,领先上游 28) | **本仓 `patches/`**:series 全量补丁物化(线性可 am 重放)+ notify-only 单特性精选 |
+| **dsh-Go** | 手机宿主(AGPL 公开) | 上游 = `ccch1mneyyy/dsh-Go`(项目本体);fork = `theVincentWei/dsh-Go` | `main`(本地线:基线 a75c6cff@#602 + 124 提交,落后上游 ~1250,升级走 merge) | 本仓 `local-series/` + fork push(main + `v1.0.11-local` tag + `upstream` 分支) |
+| **dimina** | 容器 fork(didi/dimina,公开) | 上游 = `didi/dimina`;fork = `theVincentWei/dimina` | `main`(基线 v1.8.1/eef595c + 30 适配提交 + 1 档案提交;上游 tip 已前进 11) | 本仓 `patches/` + fork push(main 强刷为本地线) |
 
 > 2026-11-11 减负:wanqi 不再携带示例与别仓档案——`examples/`(源码快照 + dist)迁 dsh-go-miniprograms,
 > `patches/dimina/` 迁 dimina 仓 `patches/`,`patches/dsh-go-series/` 迁 dsh-Go 仓 `local-series/`。
@@ -35,12 +35,14 @@
 
 ## 2. dsh-Go:跟上游主线升级
 
+> 修正(2026-11-11):`ccch1mneyyy/dsh-Go` 是**项目本体**(AGPL,v1.0.x release PR 均出自该号),旧文档误记为「用户 fork」;我们的 fork 在 `theVincentWei/dsh-Go`(public),本地 remote 已重排:origin=fork,upstream=本体。
+
 本仓历史**含 32 个 merge,merge 携带真实内容**(实证:线性 am 重放丢冲突解决)——所以:
 
 - **升级方式 = merge,不是 rebase**:`git fetch origin && git merge origin/main`,冲突一次解决,我们的历史(含 merge)原样保留。
 - rebase/线性化只用于**新特性分支内部**(分支可以线性,rebase 上 main 前理直)。
 - **升级后动作**:全量回归(测试 + 真机冒烟)→ `local-series/catalog.tsv` 增量补登 → 树 SHA 抽查(可选:`git format-patch` 再生 + 临时 clone 对账)。
-- **备份**:定期 `git push origin main`(origin 是用户自己的 fork)。**push 前必做全量历史密钥扫描**(见 wanqi backlog)。
+- **备份(2026-11-11 已做)**:本地 main 已强推为 fork main + 打 `v1.0.11-local` tag(手机在用版本 1.0.11+1),上游线存 fork `upstream` 分支;push 前全量密钥扫描已完成(63 命中均为代码标识符/假值,零真密钥)。本地线与上游已分叉,后续刷 fork main 用 `git push --force origin main`。
 
 ## 3. dimina:跟上游 didi/dimina 升级
 
@@ -48,7 +50,7 @@
 
 - **升级方式 = rebase**:`git fetch --unshallow origin && git rebase --onto <新上游基线> <旧基线> main`,merge 提交会被丢弃——**这是安全的**(树 SHA 对账已证明内容不依赖它们),但 rebase 后必须跑一次「全系列 git am → 树 SHA 对账」作为安全门。
 - rebase 后:dimina 仓 `patches/series/` 全系列**重新物化**(编号/基线/树 SHA 全部刷新)+ README 更新。
-- **建议(未做)**:给 fork 建自己的私有远端,原始历史双保险(`patches/` 是内容备份,不是可推送的远端)。
+- **备份(2026-11-11 已做)**:公开 fork = `theVincentWei/dimina`,main 强推为本地线(基线 tag v1.8.1 天然在历史内),上游 tip 存 fork `upstream` 分支;rebase 升级后同样强刷 fork main。
 
 ## 4. wanqi 与 dsh-go-miniprograms 自身
 
@@ -59,4 +61,4 @@
 ## 5. 分类纪律(dsh-Go catalog)
 
 - 每个新提交落 `local-series/catalog.tsv` 时标三类之一:**平台对接**(可随万器公开,待拍板)/ **个人 UI**(永不开源)/ **基础设施**;拿不准按主要目的归并 + 备注理由。
-- 开源物化(平台类精选补丁)**挂起中**——等用户对开源范围拍板,届时从 git 按分类再生,不预支体积。
+- **开源范围已拍板(2026-11-11):全公开**——上游本就公开,fork 亦公开;「个人 UI」类提交随 fork 一并公开,catalog 三类标注降级为历史备注。
