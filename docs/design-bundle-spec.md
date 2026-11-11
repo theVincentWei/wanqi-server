@@ -75,7 +75,10 @@ sys-monitor.bundle.zip
 |---|---|
 | `bundle upgrade` | 停旧 → 换目录(旧版留作 previous/)→ 起新 → health → 更新路由;**失败自动退回 previous/** |
 | `bundle rollback` | current 指回 previous → 重启 → 重注册路由 |
-| `bundle remove` | 停进程 + 反注册路由;**data/logs/DB 保留**(重装即恢复;不做 --purge) |
+| `bundle remove [--purge]` | 停进程 + 反注册路由;**data/logs/DB 保留**(重装即恢复);`--purge` 才 DROP+删盘 |
+| **手机端卸载** | **整包卸载语义**(见下) |
+
+**手机端卸载 = 整包卸载**:dsh-go 上卸载小程序时,删手机端包+本地数据,并**通过引擎命令通道在主机执行 `bundle remove`**(停后端、反注册路由)——不留孤儿后端进程。主机 data/DB 默认保留(重装即恢复);卸载弹窗提供「同时清除主机数据」勾选 = `--purge`。经既有引擎权限模型执行,不新增 HTTP 鉴权面。已知限制:v1 默认整包卸载,多设备场景可能停掉仍被其他设备使用的后端——自用单机成立,多设备需求出现再引入「仅卸载本机」次选项。
 
 单用户自用:不做锁、不做 journal、不做 unpublish——遇到再说。
 
