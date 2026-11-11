@@ -284,7 +284,8 @@ class Notices {
   // -------------------------------------------------------------------------
 
   /// `app_tokens` 原来只有建表、没有发放流程；P2 的发送鉴权需要 per-app
-  /// token，这里补一个发布者密钥保护的管理入口（apphubctl token 调用）。
+  /// token，这里补一个发布者密钥保护的管理入口（POST /notify/token，
+  /// 管理侧以 `Authorization: Bearer <publisherKey>` 调用）。
   Future<shelf.Response> _issueToken(shelf.Request request, String appId) async {
     if (!_publisher(request)) return _errcode(40001, 'invalid credential');
     if (!isValidAppId(appId)) return _errcode(47003, 'argument invalid: appId');

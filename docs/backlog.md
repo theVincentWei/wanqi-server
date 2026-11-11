@@ -1,5 +1,8 @@
 # Backlog(2026-11-11 夜间收口时登记)
 
+## 已清理(2026-11-11 早)
+- ~~bin/apphubctl.dart 旧 CLI~~ 已删;~~tool/debug_reload.dart 一次性调试脚本~~ 已删;notices.dart 旧注释同步修正。
+
 ## 契约比对观察项(task-5 复核,不阻塞)
 1. `refresh`(无 since)只回最新 50 条,消费方注释自称「拉全量历史」——历史超 50 条时通知中心看不到更早条目。未来:消费方分页游标,或 server 对无 since 请求放宽上限。
 2. `_read`(已读)无鉴权,与 `_poll`(deviceToken)不对称——建议下轮一行对齐(`_read` 同走 `_deviceAuthorized`)。
