@@ -15,6 +15,13 @@
 
 ## 版本路线(源自 Bundle 规范 §7)
 - v1.1:DB migrations(累积式+幂等白名单)· 后端状态枚举实时回写 · 蓝绿升级 · unpublish/--purge · 并发锁 · journal 对账
+  - **边界说明(autoSync 静默升级,2026-11-11 task-9,勿当 bug 修)**:autoSync 包
+    (`bundle.json "autoSync": true`,作者在发布侧声明)的升级**跳过容器确认弹窗、
+    新包就绪即激活**——用户知情权由「发布即确认」替代,这是有意的设计取舍
+    (spec §9 / dimina 补丁 0026)。v1.1 做「后端状态枚举实时回写」时,
+    autoSync 的升级里程碑(applied/updated)照常经升级事件广播,不要给它加回
+    确认弹窗;真要给用户保留否决权,入口是宿主总开关(设置→通用→静默同步),
+    不是逐次弹窗。
 - v1.2:分片分发 · 可复现打包+bundleSha256 · minContainer 强制执行 · tools/capabilities 门禁 · export/import-data
 - v2:多机交换 · 数据源路由表/多连 · R1–R4 完整演进 · 多运行时
 - 多机手机侧:阶段一离线地基(见 review/design-multi-host.md)· 阶段二三态状态机
