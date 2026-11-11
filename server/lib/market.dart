@@ -145,6 +145,9 @@ class Market {
       'path': await _appPath(appId),
       'versionCode': version['version_code'],
       'versionName': version['version_name'],
+      // autoSync 静默同步(万器扩展):manifest 透传,手机宿主据此后台
+      // 静默安装/升级;老容器按未知字段忽略,缺省 false。
+      'autoSync': await _appAutoSync(appId),
       // Absolute: the Dimina updater fetches this URL, and the Host the client
       // used for the manifest is exactly the host it can fetch the package
       // from (LAN IP, adb reverse loopback, or the ssh tunnel — all work).
@@ -180,6 +183,14 @@ class Market {
     final rows = await db.q('SELECT backend FROM apps WHERE app_id = ?', [appId]);
     if (rows.isEmpty) return false;
     final Object? value = rows.first['backend'];
+    return value is int ? value != 0 : int.tryParse(value.toString()) != 0;
+  }
+
+  /// autoSync 静默同步标志(bundle.json 顶层 autoSync,缺省 false)。
+  Future<bool> _appAutoSync(String appId) async {
+    final rows = await db.q('SELECT auto_sync FROM apps WHERE app_id = ?', [appId]);
+    if (rows.isEmpty) return false;
+    final Object? value = rows.first['auto_sync'];
     return value is int ? value != 0 : int.tryParse(value.toString()) != 0;
   }
 
@@ -321,6 +332,7 @@ class Market {
       'name': await _appName(appId, fallback: appId),
       'path': await _appPath(appId),
       'backend': await _appBackend(appId),
+      'autoSync': await _appAutoSync(appId),
       'description': description,
       'category': category,
       'versionCode': version?['version_code'],
@@ -492,6 +504,7 @@ class Market {
     String? description,
     String? category,
     bool? backend,
+    bool? autoSync,
     String actor = 'publisher',
     String action = 'publish',
   }) async {
@@ -548,7 +561,10 @@ class Market {
         listing != null ? jsonEncode(listing) : latest?['listing_json'] as String?;
 
     await store.upsertApp(appId, name, path,
-        description: description, category: category, backend: backend);
+        description: description,
+        category: category,
+        backend: backend,
+        autoSync: autoSync);
     await store.insertVersion(
       appId: appId,
       versionCode: versionCode,

@@ -181,12 +181,16 @@ void main() {
   });
 
   test('install → upgrade → rollback(纯前端) 回指 v1,无 409', () async {
-    final shelf.Response install = await service.router
-        .call(zipRequest('/api/v1/bundle/install', zipBytes(bundleArchive(code: 1))));
+    // 两个版本的 zip 都先建好再装:ZipEncoder 会嵌当前时间戳,装完再重建
+    // 逐字节比对会跨秒失配(flaky)。
+    final Uint8List v1bytes = zipBytes(bundleArchive(code: 1));
+    final Uint8List v2bytes = zipBytes(bundleArchive(code: 2));
+    final shelf.Response install =
+        await service.router.call(zipRequest('/api/v1/bundle/install', v1bytes));
     expect(install.statusCode, 200);
 
-    final shelf.Response upgrade = await service.router
-        .call(zipRequest('/api/v1/bundle/install', zipBytes(bundleArchive(code: 2))));
+    final shelf.Response upgrade =
+        await service.router.call(zipRequest('/api/v1/bundle/install', v2bytes));
     expect(upgrade.statusCode, 200);
     expect((await store.latestVersion(appId))?['version_code'], 2);
 
@@ -203,14 +207,91 @@ void main() {
     // ② the downloadable zip is the v1 bytes, sha256 consistent
     final File v1zip = File(cfg.packagePath(appId, 1));
     expect(await v1zip.exists(), isTrue);
-    final List<int> bytes = await v1zip.readAsBytes();
-    expect(bytes, zipBytes(bundleArchive(code: 1)));
+    expect(await v1zip.readAsBytes(), v1bytes);
     expect(latest?['sha256'], isNotNull);
     // newer version's zip remains on disk (harmless orphan)
     expect(await File(cfg.packagePath(appId, 2)).exists(), isTrue);
+    expect(await File(cfg.packagePath(appId, 2)).readAsBytes(), v2bytes);
     // no backend involved anywhere
     expect(Directory(p.join(backendsDir.path, appId)).existsSync(), isFalse);
     expect((await store.listRoutes()).where((r) => r['appId'] == appId), isEmpty);
+  });
+
+  test('autoSync:bundle.json 顶层字段 → 市场行/manifest/install 响应透传', () async {
+    final Archive archive = Archive();
+    void add(String name, String content) {
+      final List<int> bytes = utf8.encode(content);
+      archive.addFile(ArchiveFile(name, bytes.length, bytes));
+    }
+
+    add(
+        'bundle.json',
+        jsonEncode(<String, Object?>{
+          'spec': 1,
+          'appId': appId,
+          'name': 'svc 测试应用',
+          'version': <String, Object?>{'code': 1, 'name': '1.1.0'},
+          'frontend': <String, Object?>{'entry': 'pages/index/index'},
+          'autoSync': true,
+        }));
+    add('main/app-config.json', '{"app":{"pages":["pages/index/index"]}}');
+    add('main/logic.js', 'console.log(1)');
+
+    final shelf.Response install =
+        await service.router.call(zipRequest('/api/v1/bundle/install', zipBytes(archive)));
+    expect(install.statusCode, 200);
+    expect((await bodyJson(install))['autoSync'], isTrue);
+
+    // 市场行透传
+    final List<Map<String, Object?>> apps = await store.listApps();
+    expect(apps.single['autoSync'], isTrue);
+
+    // 升级版 zip 继续带 autoSync:true → 保持 true
+    final Archive upgradeArchive = Archive();
+    void addUp(String name, String content) {
+      final List<int> bytes = utf8.encode(content);
+      upgradeArchive.addFile(ArchiveFile(name, bytes.length, bytes));
+    }
+
+    addUp(
+        'bundle.json',
+        jsonEncode(<String, Object?>{
+          'spec': 1,
+          'appId': appId,
+          'name': 'svc 测试应用',
+          'version': <String, Object?>{'code': 2, 'name': '1.2.0'},
+          'frontend': <String, Object?>{'entry': 'pages/index/index'},
+          'autoSync': true,
+        }));
+    addUp('main/app-config.json', '{"app":{"pages":["pages/index/index"]}}');
+    addUp('main/logic.js', 'console.log(2)');
+    final shelf.Response upgrade = await service.router
+        .call(zipRequest('/api/v1/bundle/install', zipBytes(upgradeArchive)));
+    expect(upgrade.statusCode, 200);
+    expect((await store.listApps()).single['autoSync'], isTrue);
+
+    // 缺省语义:新版 zip 不写 autoSync → 复位 false(缺省 false,逐版本权威)
+    final Archive plain = Archive();
+    void addPlain(String name, String content) {
+      final List<int> bytes = utf8.encode(content);
+      plain.addFile(ArchiveFile(name, bytes.length, bytes));
+    }
+
+    addPlain(
+        'bundle.json',
+        jsonEncode(<String, Object?>{
+          'spec': 1,
+          'appId': appId,
+          'name': 'svc 测试应用',
+          'version': <String, Object?>{'code': 3, 'name': '1.3.0'},
+          'frontend': <String, Object?>{'entry': 'pages/index/index'},
+        }));
+    addPlain('main/app-config.json', '{"app":{"pages":["pages/index/index"]}}');
+    addPlain('main/logic.js', 'console.log(3)');
+    final shelf.Response downgradeFlag = await service.router
+        .call(zipRequest('/api/v1/bundle/install', zipBytes(plain)));
+    expect(downgradeFlag.statusCode, 200);
+    expect((await store.listApps()).single['autoSync'], isFalse);
   });
 
   test('rollback on a single-version app → 409 only-one-version', () async {

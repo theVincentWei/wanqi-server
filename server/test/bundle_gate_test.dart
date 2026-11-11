@@ -429,4 +429,38 @@ void main() {
       expect(backendStartEntry('node serve'), isNull);
     });
   });
+
+  group('autoSync(万器扩展,缺省 false)', () {
+    Object manifestWith(Object? autoSync) => <String, Object?>{
+          'spec': 1,
+          'appId': 'wanqi-test-app',
+          'name': 'x',
+          'version': <String, Object?>{'code': 1},
+          'frontend': <String, Object?>{'entry': 'p'},
+          if (autoSync != null) 'autoSync': autoSync,
+        };
+
+    test('缺省 false', () {
+      final Archive archive =
+          archiveOf(zipOf(goodFiles(bundleJson: jsonEncode(manifestWith(null)))));
+      expect(gateBundle(archive, zipBytes: 100).manifest!.autoSync, isFalse);
+    });
+
+    test('true/false 透传', () {
+      final Archive on = archiveOf(
+          zipOf(goodFiles(bundleJson: jsonEncode(manifestWith(true)))));
+      expect(gateBundle(on, zipBytes: 100).manifest!.autoSync, isTrue);
+      final Archive off = archiveOf(
+          zipOf(goodFiles(bundleJson: jsonEncode(manifestWith(false)))));
+      expect(gateBundle(off, zipBytes: 100).manifest!.autoSync, isFalse);
+    });
+
+    test('非 bool 值按 false 处理(R1 忽略口径),不拒装', () {
+      final Archive archive = archiveOf(
+          zipOf(goodFiles(bundleJson: jsonEncode(manifestWith('yes')))));
+      final BundleGateResult gate = gateBundle(archive, zipBytes: 100);
+      expect(gate.rejected, isFalse);
+      expect(gate.manifest!.autoSync, isFalse);
+    });
+  });
 }

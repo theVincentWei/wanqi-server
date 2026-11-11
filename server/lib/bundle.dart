@@ -84,6 +84,7 @@ class BundleManifest {
     required this.versionName,
     required this.frontendEntry,
     required this.backend,
+    this.autoSync = false,
   });
 
   final int spec;
@@ -97,6 +98,10 @@ class BundleManifest {
 
   /// Null = pure frontend app (no backend dir, no routes).
   final BundleBackend? backend;
+
+  /// autoSync 静默同步(万器扩展,R1 演进规则安全:老 server 按未知字段忽略,
+  /// 缺省 false)。true = 手机宿主可在后台静默安装/升级这个 app,不弹确认。
+  final bool autoSync;
 
   /// Parses decoded bundle.json, throwing [BundleException] on anything the
   /// server cannot safely consume.
@@ -146,6 +151,9 @@ class BundleManifest {
       versionName: versionName,
       frontendEntry: entry,
       backend: _parseBackend(decoded['backend']),
+      // 万器扩展:autoSync(顶层可选 bool,缺省 false;非 bool 值按 false 处理,
+      // 与 spec R1「未知/坏字段忽略」同口径)。
+      autoSync: decoded['autoSync'] is bool ? decoded['autoSync'] as bool : false,
     );
   }
 

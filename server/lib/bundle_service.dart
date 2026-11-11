@@ -132,6 +132,7 @@ class BundleService {
       versionName: manifest.versionName,
       latest: latest,
       backend: manifest.backend != null,
+      autoSync: manifest.autoSync,
       actor: 'bundle',
       action: 'bundle.install',
     );
@@ -215,6 +216,7 @@ class BundleService {
     return _json(<String, Object?>{
       ...published,
       'backend': manifest.backend != null,
+      'autoSync': manifest.autoSync,
       'routes': prefixes,
       if (livePort != null) 'port': livePort,
       if (manifest.backend != null)
@@ -313,7 +315,7 @@ class BundleService {
       }
       livePort = started.port;
       await store.upsertApp(appId, manifest.name, manifest.frontendEntry,
-          backend: true);
+          backend: true, autoSync: manifest.autoSync);
     } else {
       // Frontend-only donor (or legacy zip without bundle.json): the backend
       // half goes away entirely — code dirs deleted, data/logs/DB kept.
@@ -322,8 +324,8 @@ class BundleService {
       await gateway.reload();
       prefixes = const <String>[];
       if (donorManifest != null) {
-        await store.upsertApp(appId, donorManifest.name,
-            donorManifest.frontendEntry, backend: false);
+        await store.upsertApp(appId, donorManifest.name, donorManifest.frontendEntry,
+            backend: false, autoSync: donorManifest.autoSync);
       } else {
         await store.setAppBackend(appId, false);
       }

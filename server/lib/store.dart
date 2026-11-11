@@ -46,12 +46,13 @@ class Store {
   /// [backend] tri-state: null = leave the stored flag alone (plain publish),
   /// true/false = bundle install/remove owns it (Bundle v1 §5⑤).
   Future<void> upsertApp(String appId, String name, String path,
-      {String? description, String? category, bool? backend}) async {
+      {String? description, String? category, bool? backend, bool? autoSync}) async {
     await db.exec(
-        'INSERT INTO apps (app_id, name, path, description, category, backend) VALUES (?, ?, ?, ?, ?, ?) '
+        'INSERT INTO apps (app_id, name, path, description, category, backend, auto_sync) VALUES (?, ?, ?, ?, ?, ?, ?) '
         'ON DUPLICATE KEY UPDATE name = VALUES(name), path = VALUES(path), '
         'description = VALUES(description), category = VALUES(category), '
-        'backend = COALESCE(VALUES(backend), backend)',
+        'backend = COALESCE(VALUES(backend), backend), '
+        'auto_sync = COALESCE(VALUES(auto_sync), auto_sync)',
         [
           appId,
           name,
@@ -59,6 +60,7 @@ class Store {
           description,
           category,
           backend == null ? null : (backend ? 1 : 0),
+          autoSync == null ? null : (autoSync ? 1 : 0),
         ]);
   }
 
@@ -157,7 +159,7 @@ class Store {
 
   Future<List<Map<String, Object?>>> listApps() async {
     final List<Map<String, Object?>> rows = await db.q(
-        'SELECT a.app_id, a.name, a.path, a.category, a.backend, a.created_at, '
+        'SELECT a.app_id, a.name, a.path, a.category, a.backend, a.auto_sync, a.created_at, '
         'v.version_code, v.version_name, v.sha256, v.changelog, v.icon, v.icon_file, '
         // listing_json 只为取列表行的一行副标题,解析失败按空串降级。
         'v.listing_json, v.size_bytes '
@@ -173,6 +175,7 @@ class Store {
           'path': row['path'],
           'category': row['category'],
           'backend': (_int(row['backend']) ?? 0) != 0,
+          'autoSync': (_int(row['auto_sync']) ?? 0) != 0,
           'versionCode': _int(row['version_code']),
           'versionName': row['version_name'],
           'sha256': row['sha256'],
