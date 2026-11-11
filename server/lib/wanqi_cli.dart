@@ -19,6 +19,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/args.dart';
+
+import 'package:apphub/server_runner.dart';
 import 'package:http/http.dart' as http;
 
 const String _usage = '''
@@ -33,6 +35,7 @@ Usage: wanqi — Wanqi Bundle CLI
                                      logs/DB/packages (手机端整包卸载的清除勾选)
   wanqi list                         list installed apps
 
+  wanqi serve [--config <path>]      # 前台跑 server(与 launchd 启动器同核,分发形态)
   wanqi service doctor               # 生命周期体检:按 db→server→engine→test 检活+自动拉起
   wanqi service status [--json]      # 四组件健康表 + 托管形态(launchd/nohup)
   wanqi service start|stop|restart [db|server|engine|test|all]
@@ -182,6 +185,11 @@ class WanqiCli {
   Future<int> run(List<String> args, {StringSink? out, StringSink? err}) async {
     final StringSink stdoutSink = out ?? stdout;
     final StringSink stderrSink = err ?? stderr;
+    if (args.isNotEmpty && args.first == 'serve') {
+      // 常驻服务:同进程直接跑 server 循环(AOT 二进制的分发形态,详见 docs/server-lifecycle.md)。
+      await runServer(args.skip(1).toList());
+      return 0;
+    }
     if (args.isNotEmpty && args.first == 'service') {
       // 生命周期不走 ApiResult 管道:直接委托 lifecycle.sh 并透传退出码。
       return _service(args.skip(1).toList(), stdoutSink, stderrSink);

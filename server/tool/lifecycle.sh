@@ -163,7 +163,8 @@ doctor() {
 # ---------- install / uninstall(一次性注册到 launchd) ----------
 PLIST_DIR="$HOME/Library/LaunchAgents"
 install_services() {
-  "$BREW" services start mariadb >/dev/null 2>&1 || true  # 注册 + 开机自启(gui 域下生效)
+  # 接管语义:先清手动态进程,避免 launchd 实例与 nohup 实例抢端口
+  stop_ordered all >/dev/null 2>&1 || true
   local rc=0
   for lbl in app.dsh.apphub.server app.dsh.apphub.engine app.dsh.wanqi-test.server; do
     local plist="$PLIST_DIR/$lbl.plist"
@@ -179,7 +180,12 @@ install_services() {
       rc=1
     fi
   done
-  [ "$rc" = 0 ] && log "install: 全部注册完成" || log "install: 部分失败(见上)"
+  if [ "$rc" = 0 ]; then
+    log "install: 全部注册完成"
+  else
+    log "install: 部分失败,回退为手动运行态(服务不中断)"
+    ensure_ordered all >/dev/null 2>&1 || true
+  fi
   return $rc
 }
 uninstall_services() {

@@ -43,6 +43,8 @@ server/tool/lifecycle.sh logs <db|server|engine|test> [-n 行数] [-f]
 ```
 
 > **入口定稿(2026-11-11 下午)**:`wanqi service …` 是**唯一正式入口**——全局命令 shim 在 `~/.local/bin/wanqi`(源文件 `server/tool/wanqi`;CLI 侧 server/lib/wanqi_cli.dart 委托本脚本并透传退出码)。server 本身就是 dart,CLI 入口不引入任何新依赖;`tool/lifecycle.sh` 降级为**实现细节 + dart 不可用时的应急后门**(如 SDK 升级窗口),不算接口。
+> CLI 分发演进路线(2026-11-11 拍板):现阶段 clone 仓 + `bash server/tool/install-cli.sh`;开源后可选 `dart pub global activate` from git(与 npm install -g 同角色但语言原生);npm/brew 等壳包等 CLI 能独立于仓库干活再议——CLI 是仓库的遥控器,先行分发无意义。
+> 分发里程碑 1 进度(2026-11-11):✅ AOT 编译验证(裸跑无 SDK 依赖,启动 0.08s);✅ server 循环搬入 lib/server_runner.dart(bin/apphub.dart 薄壳,launchd 启动器不受影响);✅ `wanqi serve` 同进程跑 server(统一二进制 8.0M,7699 副本端口实测 200+13 应用,生产无扰)。待办:lifecycle 二进制模式(install 生成指向二进制 serve 的 plist)、tarball 打包脚本。
 
 实现要点:
 
