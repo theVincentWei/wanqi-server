@@ -1,4 +1,4 @@
-# dimina 全量本地适配补丁系列(25 patches)
+# dimina 全量本地适配补丁系列(26 patches)
 
 Dimina 容器 fork 相对上游 didi/dimina 的**全部本地适配**存档,不止通知:微信语义深色模式全套、
 菜单/弹层主题化、音频 API、redirectTo 双层修复、升级收归框架、订阅消息 API 面、tabBar WIP。
@@ -6,11 +6,14 @@ Dimina 容器 fork 相对上游 didi/dimina 的**全部本地适配**存档,不�
 ## 覆盖声明
 
 - **基线** = 上游 didi/dimina `main @ eef595cf6d756701bf0d32b9a90e317f86ba944e`(merge-base,克隆时点 tip)。
-- **本地增量 = 28 个提交 = 本系列 25 个 patch + 3 个 merge 提交**(`format-patch` 固有跳过 merge;
+- **本地增量 = 29 个提交 = 本系列 26 个 patch + 3 个 merge 提交**(`format-patch` 固有跳过 merge;
   3 个 merge 均为特性分支合入,无未被携带的自含内容)。
+- **增量记录**:patch 0026(autoSync 静默同步,task-9)由 wanqi-server 于 2026-11-11 追加,追加后重跑
+  git am 干跑 26/26 零冲突,树 SHA 与 fork main 重新对账一致。
 - **无损对账(树 SHA 铁证)**:从基线 `git am` 全系列后,最终树 SHA
-  `777918bbf285c7b6c7a22ed8727a523718b818c9` 与 dimina 本地 `main @ 5121b17` 的树 SHA **完全一致**——
-  应用结果与 fork 工作树逐字节相同。
+  `4c58683f2229c89be5074d09dfbe9daca575b0a9` 与 dimina 本地 `main @ 7c8a3af` 的树 SHA **完全一致**——
+  应用结果与 fork 工作树逐字节相同(存档时点 1 为 25 patches 时的
+  `777918bb…` @ 5121b17,追加 0026 后按上表增量记录更新)。
 - 存档时点:2026-11-11;dimina 工作树在存档前已把 TabBar WIP 显式提交(`wip(tabbar)…`,patch 0025),工作树干净。
 
 ## 应用方式(git am)
@@ -18,10 +21,10 @@ Dimina 容器 fork 相对上游 didi/dimina 的**全部本地适配**存档,不�
 ```bash
 git clone https://github.com/didi/dimina.git && cd dimina
 git checkout eef595cf6d756701bf0d32b9a90e317f86ba944e      # 基线(上游 tip)
-git am /path/to/patches/dimina-series/*.patch              # 按 0001→0025 编号顺序
+git am /path/to/patches/dimina-series/*.patch              # 按 0001→0026 编号顺序
 ```
 
-干跑实测:25 个 `git am` 全过、零冲突,完成后树与存档时 fork 完全一致。
+干跑实测:26 个 `git am` 全过、零冲突,完成后树与 fork main 逐字节一致。
 注意 commit SHA 会变(patch 重放),**树内容不变**;对账用 `git rev-parse HEAD^{tree}`。
 
 ## 逐 patch 表格
@@ -53,6 +56,7 @@ git am /path/to/patches/dimina-series/*.patch              # 按 0001→0025 编
 | 0023 | [`0023-test-redirectTo-fe-vitest.patch`](0023-test-redirectTo-fe-vitest.patch) | `bbc30c7` | redirectTo修复 | redirectTo 事件链路回归用例(fe vitest)+ 设备冒烟脚本 |
 | 0024 | [`0024-feat-wx.requestSubscribeMessage-API-fe-Android-iOS-g.patch`](0024-feat-wx.requestSubscribeMessage-API-fe-Android-iOS-g.patch) | `191a6fb` | 通知 | wx.requestSubscribeMessage 订阅消息 API 面(fe+Android+iOS)+ getSetting.subscriptionsSetting(通知,详见 ../dimina-notify/) |
 | 0025 | [`0025-wip-tabbar-white-16-black-10-alpha-12sp-3dp-49dp-JVM.patch`](0025-wip-tabbar-white-16-black-10-alpha-12sp-3dp-49dp-JVM.patch) | `5121b17` | TabBar | wip:tabBar 上边框改微信语义发丝线(white 16%/black 10% alpha)+ 标签行盒 12sp/3dp 居中 + JVM 源码钉住测试 |
+| 0026 | [`0026-feat-auto-sync-autoSync-autoSync.patch`](0026-feat-auto-sync-autoSync-autoSync.patch) | `7c8a3af` | autoSync | autoSync 静默同步:MiniProgram.autoUpdate 字段(旁路升级确认弹窗)+ RemoteUpdateManager.syncPackage 静默装/升原语 + MiniApp.syncInBackground(里程碑照常广播)+ DiminaActivity 启动前旁路 + Dimina.syncMiniProgram 门面 |
 
 ## 与 dimina-notify/ 的关系
 
