@@ -35,6 +35,7 @@ SendDecision decide({
   int remain = 1,
   bool rateLimited = false,
   bool dedupeHit = false,
+  bool requireSubscription = true,
 }) =>
     decideSend(
       tokenValid: tokenValid,
@@ -45,6 +46,7 @@ SendDecision decide({
       remain: remain,
       rateLimited: rateLimited,
       dedupeHit: dedupeHit,
+      requireSubscription: requireSubscription,
     );
 
 void main() {
@@ -267,6 +269,35 @@ void main() {
       expect(decision.errcode, 0);
       expect(decision.errmsg, 'ok');
       expect(decision.sends, isTrue);
+    });
+  });
+
+  group('权限总闸关闭(2026-11-11 临时:NotifyPolicy.subscription=false)', () {
+    final Map<String, Object?> template = templateWithFields(const <Map<String, Object?>>[]);
+
+    test('配额 0 / 偏好关都照发(不再 43101)', () {
+      final SendDecision decision = decide(
+          tmpl: template,
+          prefsEnabled: false,
+          remain: 0,
+          requireSubscription: false);
+      expect(decision.errcode, 0);
+      expect(decision.sends, isTrue);
+    });
+
+    test('关闭后格式校验/限流仍生效', () {
+      expect(decide(tmpl: template, rateLimited: true, requireSubscription: false).errcode,
+          45009);
+      final Object? badData = <String, Object?>{
+        'thing01': <String, Object?>{'value': ''},
+        'time2': <String, Object?>{'value': '15:01'},
+      };
+      expect(decide(tmpl: template, data: badData, requireSubscription: false).errcode,
+          40003);
+    });
+
+    test('默认(不传 requireSubscription)= 契约原行为:配额 0 → 43101', () {
+      expect(decide(tmpl: template, remain: 0).errcode, 43101);
     });
   });
 

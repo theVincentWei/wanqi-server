@@ -168,6 +168,7 @@ class NotifyStore {
     required String? argumentError,
     String? page,
     String? dedupeKey,
+    bool requireSubscription = true,
   }) async {
     return db.transaction<SendOutcome>((DbTx tx) async {
       // 配额行加锁（第 6 步）：SELECT … FOR UPDATE 让同
@@ -195,6 +196,7 @@ class NotifyStore {
         remain: remain,
         rateLimited: rateLimited,
         dedupeHit: dedupeHit,
+        requireSubscription: requireSubscription,
       );
       if (!decision.ok) {
         return SendOutcome(errcode: decision.errcode, errmsg: decision.errmsg);
@@ -223,12 +225,16 @@ class NotifyStore {
       final List<Map<String, Object?>> idRows =
           await tx.q('SELECT LAST_INSERT_ID() AS id');
       final int noticeId = idRows.isEmpty ? 0 : _int(idRows.first['id']) ?? 0;
-      await tx.exec(
-          'UPDATE notify_subscriptions SET remain = remain - 1, updated_at = CURRENT_TIMESTAMP '
-          'WHERE app_id = ? AND template_id = ? AND user_id = "local"',
-          [appId, templateId]);
+      // 订阅闸关闭时配额没有意义，不扣减（否则重新打开时 remain 会变负）。
+      if (requireSubscription) {
+        await tx.exec(
+            'UPDATE notify_subscriptions SET remain = remain - 1, updated_at = CURRENT_TIMESTAMP '
+            'WHERE app_id = ? AND template_id = ? AND user_id = "local"',
+            [appId, templateId]);
+      }
       await tx.audit('notify', 'notify.send',
-          '$appId $templateId remain ${remain - 1} state=$miniprogramState');
+          '$appId $templateId ${requireSubscription ? 'remain ${remain - 1}' : 'no-quota'} '
+          'state=$miniprogramState');
       return SendOutcome(
         errcode: 0,
         errmsg: 'ok',

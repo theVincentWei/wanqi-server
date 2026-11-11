@@ -47,6 +47,7 @@ Future<void> main() async {
   _dataValidation();
   _eightStepOrder();
   _quotaExhausted();
+  _policyOff();
   _dedupeIdempotency();
   _argumentsAndHelpers();
 
@@ -286,6 +287,51 @@ void _eightStepOrder() {
 // ---------------------------------------------------------------------------
 // 5. 配额耗尽 43101（契约 §4.1/§4.2）
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 4b. 权限总闸关闭（2026-11-11 临时：NotifyPolicy.subscription=false）
+// ---------------------------------------------------------------------------
+void _policyOff() {
+  section('权限总闸关闭（临时）');
+
+  final Map<String, Object?> template = templateWithFields(const <Map<String, Object?>>[]);
+  final SendDecision free = decideSend(
+    tokenValid: true,
+    template: template,
+    data: goodData(),
+    prefsEnabled: false,
+    remain: 0,
+    rateLimited: false,
+    requireSubscription: false,
+  );
+  check('配额 0 / 偏好关 → 照发 0', free.errcode, 0);
+  checkTrue('确实需要落库', free.sends);
+  check(
+    '关闭后限流仍 45009',
+    decideSend(
+      tokenValid: true,
+      template: template,
+      data: goodData(),
+      prefsEnabled: true,
+      remain: 1,
+      rateLimited: true,
+      requireSubscription: false,
+    ).errcode,
+    45009,
+  );
+  check(
+    '默认(不传)= 契约原行为 43101',
+    decideSend(
+      tokenValid: true,
+      template: template,
+      data: goodData(),
+      prefsEnabled: true,
+      remain: 0,
+      rateLimited: false,
+    ).errcode,
+    43101,
+  );
+}
+
 void _quotaExhausted() {
   section('配额耗尽 43101');
 

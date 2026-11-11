@@ -11,6 +11,11 @@
 ///
 /// 边界：本文件只做 HTTP 形状与参数边界；纯校验/判定在 notify_logic.dart，
 /// SQL 与「判定+落库同一事务」在 notify_store.dart。
+///
+/// **权限**：所有鉴权（app token / device token / consent loopback）与订阅配额
+/// 都受 [kCurrentNotifyPolicy] 总闸控制。2026-11-11 临时全关（用户拍板：先把
+/// 鉴权拔了，整套权限系统统一设计后再统一打开）；打开时只改那个常量，
+/// 路由里的 `policy.auth` / `policy.subscription` 判定不用动。
 library;
 
 import 'dart:convert';
@@ -64,13 +69,17 @@ int _httpStatusFor(int errcode) {
 class Notices {
   /// [push] 是万器预留的推送分发口(v1 = NullPushDispatcher,纯客户端拉):
   /// 发送落库成功后调用一次,失败只写日志、不影响 errcode 0 的响应。
-  Notices(this.cfg, Db db, {PushDispatcher? push})
+  Notices(this.cfg, Db db, {PushDispatcher? push, this.policy = kCurrentNotifyPolicy})
       : store = NotifyStore(db),
         push = push ?? NullPushDispatcher();
 
   final AppConfig cfg;
   final NotifyStore store;
   final PushDispatcher push;
+
+  /// 权限总闸（契约 §4.2/§5.4）。默认 [kCurrentNotifyPolicy]；测试/联调可以
+  /// 显式注入 `NotifyPolicy(auth: true, subscription: true)` 复现原行为。
+  final NotifyPolicy policy;
 
   shelf_router.Router get router {
     return shelf_router.Router()
@@ -99,7 +108,10 @@ class Notices {
   Future<shelf.Response> _send(shelf.Request request, String appId) async {
     if (!isValidAppId(appId)) return _errcode(47003, 'argument invalid: appId');
     // 第 1 步：token 校验（app_tokens 的 per-app token，Bearer）。
-    if (!await _authorized(request, appId)) return _errcode(40001, 'invalid credential');
+    // 权限总闸关着时跳过——这是 2026-11-11 的临时状态，不是契约终态。
+    if (policy.auth && !await _authorized(request, appId)) {
+      return _errcode(40001, 'invalid credential');
+    }
     final Map<String, Object?>? body = await _readBody(request);
     if (body == null) return _errcode(47003, 'argument invalid: body');
 
@@ -144,6 +156,7 @@ class Notices {
       argumentError: argumentError,
       page: body['page'] is String ? body['page'] as String : null,
       dedupeKey: rawDedupeKey as String?,
+      requireSubscription: policy.subscription,
     );
     // 万器预留:落库成功后交给推送分发(v1 no-op)。幂等命中与失败不分发。
     // 分发异常吞掉记日志——errcode 0 已成立,推送是尽力而为。
@@ -163,7 +176,9 @@ class Notices {
 
   Future<shelf.Response> _registerTemplate(shelf.Request request, String appId) async {
     if (!isValidAppId(appId)) return _errcode(47003, 'argument invalid: appId');
-    if (!await _authorized(request, appId)) return _errcode(40001, 'invalid credential');
+    if (policy.auth && !await _authorized(request, appId)) {
+      return _errcode(40001, 'invalid credential');
+    }
     final Map<String, Object?>? body = await _readBody(request);
     if (body == null) return _errcode(47003, 'argument invalid: body');
 
@@ -188,7 +203,7 @@ class Notices {
     //   (a) 合法的 app token（后端自查/联调用）；
     //   (b) loopback 来源（与 consent 端点同一套 loopback 判定，不新增密钥）。
     // 写入（POST）仍然只认 app token，见 [_registerTemplate]（契约 §3.2）。
-    if (!await _authorized(request, appId) && !_isLoopback(request)) {
+    if (policy.auth && !await _authorized(request, appId) && !_isLoopback(request)) {
       return _errcode(40001, 'invalid credential');
     }
     return _ok(<String, Object?>{'templates': await store.listTemplates(appId)});
@@ -203,7 +218,7 @@ class Notices {
   /// 经 LAN/隧道访问,loopback 放行不适用于它);`deviceToken` 为空 = 既有 M1
   /// 的 LAN 信任模型,轮询契约(端点/参数/响应形状)不因此改变。
   Future<shelf.Response> _poll(shelf.Request request) async {
-    if (!_deviceAuthorized(request)) {
+    if (policy.auth && !_deviceAuthorized(request)) {
       return _errcode(40001, 'invalid credential');
     }
     final int since = int.tryParse(request.url.queryParameters['since'] ?? '') ?? 0;
@@ -230,7 +245,9 @@ class Notices {
   /// 不扣配额、不限流）。dedupeKey 可选：同 app 同 key 幂等（升级重试不重复
   /// 落）。响应带落库行 id（幂等命中回查旧行；0 = 未取到，宿主照常成功处理）。
   Future<shelf.Response> _hostReport(shelf.Request request) async {
-    if (!_deviceAuthorized(request)) return _errcode(40001, 'invalid credential');
+    if (policy.auth && !_deviceAuthorized(request)) {
+      return _errcode(40001, 'invalid credential');
+    }
     final Map<String, Object?>? body = await _readBody(request);
     if (body == null) return _errcode(47003, 'argument invalid: body');
     final String? invalid = validateHostNotice(body);
@@ -284,7 +301,7 @@ class Notices {
   Future<shelf.Response> _consent(shelf.Request request) async {
     // 鉴权不引入新密钥：只认连接来源是 loopback（设备上的宿主与 AppHub 同机/
     // 同隧道）。这是「宿主内部 API」与「小程序 API」的鉴权分界。
-    if (!_isLoopback(request)) {
+    if (policy.auth && !_isLoopback(request)) {
       return _errcode(47003, 'argument invalid: source (loopback only)');
     }
     final Map<String, Object?>? body = await _readBody(request);

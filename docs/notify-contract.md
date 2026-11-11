@@ -451,3 +451,13 @@ created(unread) ──客户端拉到──▶ shown（本地通知已弹）
    轮询暴露的是通知正文，属隐私面，建议下一轮补（设备侧可用 loopback 或 device token）。
 4. `notify_prefs` 的 global/app 开关没有写接口（规格未定义 UI 入口），E2E 只能 SQL 置位。
 5. 30 天清理未接（§4.3 v1 不做，代码留了待接点）。
+
+---
+
+## 11. 权限总闸（2026-11-11 临时全关，接口保留）
+
+2026-11-11 用户拍板：整套权限系统尚无设计，先拔鉴权、留接口，统一设计后再统一打开。
+实现 = `notify_logic.dart` 的 `NotifyPolicy` + `kCurrentNotifyPolicy(auth: false, subscription: false)`：
+发送/模板登记与列表/轮询/宿主上报不再校验 token 或来源，consent 不再限 loopback，
+发送不再要求订阅配额（43101 暂不出现）；管理面 publisher key 保持不变。
+格式校验、模板存在性、幂等、限流、落库照旧。恢复时只改 `kCurrentNotifyPolicy` 一行。

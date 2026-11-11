@@ -248,6 +248,32 @@ bool isLoopbackAddress(String address) {
 // 发送判定（契约 §4.2 八步）
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 权限总闸（2026-11-11 拍板：整套权限系统尚未设计，先全关、接口保留）
+// ---------------------------------------------------------------------------
+
+/// 通知链路的权限总闸。**唯一开关点**：路由层鉴权与发送判定（订阅配额/偏好）
+/// 都读这里；统一权限系统落地后只改 [kCurrentNotifyPolicy]，不要在各路由里
+/// 散加 flag。
+///
+/// - [auth]：小程序后端凭据（`/notify`、模板登记/列表）与设备凭据（宿主轮询/
+///   上报、consent 的 loopback 限制）。false = 不校验来源与 token。
+/// - [subscription]：用户订阅配额与通知偏好总开关（契约 §4.1/§4.2 第 5–7 步）。
+///   false = 任何已登记模板的后端都能直接发，不要求先 accept。
+///
+/// 不属于本闸的（永远生效）：模板/字段格式校验、幂等去重、限流、落库语义。
+class NotifyPolicy {
+  const NotifyPolicy({this.auth = false, this.subscription = false});
+
+  final bool auth;
+  final bool subscription;
+}
+
+/// 当前生效的总闸。2026-11-11 用户拍板「先无线推送也无所谓，把鉴权先拔了，
+/// 等整套权限系统统一设计了再统一打开」→ 两项都关。
+/// 恢复时只改这一行（或按环境/配置分叉），不要动调用点。
+const NotifyPolicy kCurrentNotifyPolicy = NotifyPolicy(auth: false, subscription: false);
+
 /// 判定结果。[dedupe] 为 true 表示 dedupe_key 幂等命中：返回 0 但没有落新行、
 /// 不扣配额（重试不该重复扣费）。
 class SendDecision {
@@ -272,6 +298,10 @@ class SendDecision {
 ///   1 token → 2 模板 → 3 data → 4 参数(miniprogram_state/page) →
 ///   5 偏好开关 → 6 配额 → 7 限流 → 8 落库（落库由 store 在本函数 ok 后做）。
 ///
+/// [requireSubscription] 来自权限总闸 [NotifyPolicy.subscription]：false 时
+/// 跳过第 5 步偏好开关与第 6 步配额（2026-11-11 临时全关），其余步骤照旧。
+/// 默认 true = 契约原行为，测试与自检的既有断言不变。
+///
 /// 说明：第 8 步的 dedupe 幂等分支放在第 6/7 步之前评估——契约 §7.5 的意图是
 /// 「重试拿到同样的 0」；若先判配额，首次发送已把 remain 用光后，重试会被误判
 /// 43101，幂等就失效了。除此之外前七步严格按契约顺序返回第一个错误。
@@ -284,6 +314,7 @@ SendDecision decideSend({
   required bool rateLimited,
   String? argumentError,
   bool dedupeHit = false,
+  bool requireSubscription = true,
 }) {
   // 1. token 校验
   if (!tokenValid) return const SendDecision(40001, 'invalid credential');
@@ -295,12 +326,16 @@ SendDecision decideSend({
   if (badField != null) return SendDecision(40003, 'data invalid: $badField');
   // 4. miniprogram_state / page 参数合法性
   if (argumentError != null) return SendDecision(47003, 'argument invalid: $argumentError');
-  // 5. 用户级 / 应用级总开关
-  if (!prefsEnabled) return const SendDecision(43101, 'user refuse to accept the msg');
+  // 5. 用户级 / 应用级总开关（订阅闸关掉时整段跳过）
+  if (requireSubscription && !prefsEnabled) {
+    return const SendDecision(43101, 'user refuse to accept the msg');
+  }
   // 8(幂等分支). 同 app + dedupe_key 24h 内已发过 → 返回 0，不落库不扣配额
   if (dedupeHit) return const SendDecision.ok(dedupe: true);
-  // 6. 一次性配额
-  if (remain <= 0) return const SendDecision(43101, 'user refuse to accept the msg');
+  // 6. 一次性配额（订阅闸关掉时跳过）
+  if (requireSubscription && remain <= 0) {
+    return const SendDecision(43101, 'user refuse to accept the msg');
+  }
   // 7. 限流
   if (rateLimited) return const SendDecision(45009, 'rate limited');
   return const SendDecision.ok();
