@@ -129,3 +129,10 @@ cp -r skills/dsh-go-miniprogram ~/.dsh/skills/
 ## 状态
 
 Bundle v1(最小实现):清单门禁 + `bundle install/upgrade/rollback/remove` + 路由自动注册 + 后端置备托管。2026-11-11 起收敛为四仓拓扑,本仓只携带管理框架本体。演进路线(DB migrations、分片分发、多机交换等)见规范 §7。
+
+## 许可
+
+- 本仓库以 [AGPL-3.0](LICENSE) 开源:`server/` 自 dsh-Go(AGPL-3.0)的 apphub 服务端移植,并 vendor 其 `packages/dsh_client`,故整体沿用同协议。第三方代码与依赖的许可逐项登记在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+- 敏感配置:`server/config.local.json`(数据库口令、publisherKey、deviceToken 等)不入库,已被 `.gitignore` 排除;首次运行请从 [server/tool/apphub.config.example.json](server/tool/apphub.config.example.json) 复制创建。
+- 「万器(wanqi)」名称与本项目品牌素材版权归项目所有者,保留所有权利;fork 再发布请替换为自己的名称与素材。
+- 本软件按"现状"提供,不附带任何担保;责任与无担保条款见 AGPL-3.0 第 15–17 条。

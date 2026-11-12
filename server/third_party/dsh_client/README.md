@@ -1,5 +1,10 @@
 # dsh_client
 
+> **出处(THIRD PARTY NOTICE)**:本目录是 [dsh-Go](https://github.com/ccch1mneyyy/dsh-Go) 仓库
+> `packages/dsh_client` 的 vendor 拷贝(**AGPL-3.0**),随万器(wanqi)仓于 2026-11-11 引入(提交 `1583be6`);
+> 相对上游移除了 `src/host_files_api.dart` 等宿主专用接口,其余同源。依 AGPL-3.0 随本仓整体开源,
+> 再发布请保留本声明与上游版权声明。逐项登记见仓库根 [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)。
+
 Pure-Dart client for the DeepSeek Harness `dsh web` API. It is verified against DSH 0.2.0-rc.2 and 0.2.1-rc.2.
 
 ## Layers
