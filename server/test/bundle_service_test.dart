@@ -46,6 +46,7 @@ server.listen(port, '127.0.0.1');
 Archive bundleArchive({
   required int code,
   bool backend = false,
+  Map<String, Object?>? permissions,
 }) {
   final Archive archive = Archive();
   void add(String name, String content) {
@@ -67,6 +68,7 @@ Archive bundleArchive({
             'health': '/healthz',
             'gateway': <String>['/'],
           },
+        if (permissions != null) 'permissions': permissions,
       }));
   add('main/app-config.json', '{"app":{"pages":["pages/index/index"]}}');
   add('main/logic.js', 'console.log($code)');
@@ -526,5 +528,117 @@ void main() {
         (await marketJson('/api/v1/apps'))['apps'] as List<Object?>;
     expect(apps.where((a) => (a as Map<String, Object?>)['appId'] == appId),
         isEmpty);
+  });
+
+  test('permissions 声明段(契约 §2/§5):安装落库 → 列表行/manifest 新形态透传,详情端点保持旧形态', () async {
+    // 带声明安装:scope.record(授权级)+ glm-quota 同款 network 域名。
+    final shelf.Response installed =
+        await service.router.call(zipRequest('/api/v1/bundle/install',
+            zipBytes(bundleArchive(code: 1, permissions: <String, Object?>{
+              'scopes': <Object?>[
+                <String, Object?>{
+                  'scope': 'scope.record',
+                  'desc': '录音测试需要麦克风',
+                },
+              ],
+              'network': <String, Object?>{
+                'domains': <String>['https://open.bigmodel.cn'],
+              },
+            }))));
+    expect(installed.statusCode, 200);
+
+    Future<Map<String, Object?>> marketJson(String path) async =>
+        bodyJson(await market.router
+            .call(shelf.Request('GET', Uri.parse('http://svc.test$path'))));
+
+    // ① 列表行:新形态 {scopes:[{key,title,usage,mode}],network:{domains}};
+    //    落库原样 JSON 不出 API(permissionsJson 不存在)。
+    final List<Object?> apps =
+        (await marketJson('/api/v1/apps'))['apps'] as List<Object?>;
+    final Map<String, Object?> row = apps
+        .firstWhere((a) => (a as Map<String, Object?>)['appId'] == appId)
+        as Map<String, Object?>;
+    expect(row.containsKey('permissionsJson'), isFalse);
+    final Map<String, Object?> rowPerms = row['permissions'] as Map<String, Object?>;
+    final List<Object?> rowScopes = rowPerms['scopes'] as List<Object?>;
+    expect(rowScopes, hasLength(1));
+    final Map<String, Object?> scope = rowScopes.first as Map<String, Object?>;
+    expect(scope['key'], 'scope.record');
+    expect(scope['title'], '麦克风/录音');
+    expect(scope['usage'], '录音测试需要麦克风');
+    expect(scope['mode'], '授权级');
+    expect(
+        (rowPerms['network'] as Map<String, Object?>)['domains'],
+        <String>['https://open.bigmodel.cn']);
+
+    // ② manifest.json:同形态;未声明字段(autoSync 等)不受影响。
+    final Map<String, Object?> manifest =
+        await marketJson('/apps/$appId/manifest.json');
+    final Map<String, Object?> manifestPerms =
+        manifest['permissions'] as Map<String, Object?>;
+    expect(
+        ((manifestPerms['scopes'] as List<Object?>).first
+            as Map<String, Object?>)['key'],
+        'scope.record');
+    expect(
+        (manifestPerms['network'] as Map<String, Object?>)['domains'],
+        <String>['https://open.bigmodel.cn']);
+
+    // ③ 详情端点:{key,title,usage} 旧形态对齐 dsh-go 现成 section(老 APK
+    //    兼容),数据源已是 manifest 落库值。
+    final Map<String, Object?> detail =
+        await marketJson('/api/v1/apps/$appId');
+    final List<Object?> detailPerms = detail['permissions'] as List<Object?>;
+    expect(detailPerms, hasLength(1));
+    final Map<String, Object?> detailScope =
+        detailPerms.first as Map<String, Object?>;
+    expect(detailScope['key'], 'scope.record');
+    expect(detailScope['title'], '麦克风/录音');
+    expect(detailScope['usage'], '录音测试需要麦克风');
+    expect(detailScope.containsKey('mode'), isFalse);
+
+    // ④ 回滚捐体行随行:升 v2 后回滚,permissions_json 不丢。
+    final shelf.Response upgraded =
+        await service.router.call(zipRequest('/api/v1/bundle/install',
+            zipBytes(bundleArchive(code: 2, permissions: <String, Object?>{
+              'scopes': <Object?>[
+                <String, Object?>{
+                  'scope': 'scope.record',
+                  'desc': '录音测试需要麦克风',
+                },
+              ],
+            }))));
+    expect(upgraded.statusCode, 200);
+    final shelf.Response rollback = await market.router.call(
+        authedRequest('POST', '/api/v1/apps/$appId/rollback'));
+    expect(rollback.statusCode, 200);
+    final Map<String, Object?> rolledManifest =
+        await marketJson('/apps/$appId/manifest.json');
+    final Map<String, Object?> rolledPerms =
+        rolledManifest['permissions'] as Map<String, Object?>;
+    // v1 捐体带 network 域名;旧包新版本号回滚后仍在。
+    expect(
+        (rolledPerms['network'] as Map<String, Object?>)['domains'],
+        <String>['https://open.bigmodel.cn']);
+
+    // ⑤ 未声明(无 permissions 段)升上去(回滚已占掉 code 3,这里用 4):
+    //    列表行 permissions=null、manifest 缺字段、详情列表空——纯展示 app
+    //    零改动语义。
+    final shelf.Response clean =
+        await service.router.call(zipRequest('/api/v1/bundle/install',
+            zipBytes(bundleArchive(code: 4))));
+    expect(clean.statusCode, 200);
+    final List<Object?> appsAfter =
+        (await marketJson('/api/v1/apps'))['apps'] as List<Object?>;
+    final Map<String, Object?> cleanRow = appsAfter
+        .firstWhere((a) => (a as Map<String, Object?>)['appId'] == appId)
+        as Map<String, Object?>;
+    expect(cleanRow['permissions'], isNull);
+    final Map<String, Object?> cleanManifest =
+        await marketJson('/apps/$appId/manifest.json');
+    expect(cleanManifest.containsKey('permissions'), isFalse);
+    final Map<String, Object?> cleanDetail =
+        await marketJson('/api/v1/apps/$appId');
+    expect(cleanDetail['permissions'], isEmpty);
   });
 }

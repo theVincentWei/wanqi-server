@@ -126,6 +126,10 @@ class Market {
     if (version == null) {
       return _json(<String, Object?>{'error': 'no such app'}, 404);
     }
+    // permissions 声明透传(契约 §5):bundle.json 声明安装时随版本行落库,
+    // 这里重塑为 dsh-go 渲染形态;未声明=缺字段(老宿主按未知字段忽略)。
+    final Object? permissions =
+        permissionsForMarket(version['permissions_json'] as String?);
     final String zipName =
         '$appId-${version['version_code']}.zip';
     final Object? body = <String, Object?>{
@@ -141,6 +145,7 @@ class Market {
       // 装/升时把它持久化成本地「依赖后端」标记,换机器后据此判置灰;
       // 运行态在 /api/v1/apps 的 backendRunning,manifest 不掺运行时。
       'backend': await _appBackend(appId),
+      if (permissions != null) 'permissions': permissions,
       // Absolute: the Dimina updater fetches this URL, and the Host the client
       // used for the manifest is exactly the host it can fetch the package
       // from (LAN IP, adb reverse loopback, or the ssh tunnel — all work).
@@ -264,11 +269,17 @@ class Market {
         for (final Map<String, Object?> app in apps)
           <String, Object?>{
             ...app,
+            // permissions 声明透传(契约 §5):重塑自安装时落库的
+            // permissions_json;未声明=null(键恒在,形态稳定,dsh-go 按
+            // null 渲染为无声明)。permissionsJson 是落库原样 JSON,
+            // 只作重塑输入,不出 API。
+            'permissions':
+                permissionsForMarket(app['permissionsJson'] as String?),
             // 运行态:后端此刻是否在本机(多机可用性判定用;纯前端恒 false)。
             'backendRunning': backendRunning(app['appId'] as String),
             if ((app['iconFile'] as String?)?.isNotEmpty ?? false)
               'iconUrl': _iconUrl(host, app['iconFile']),
-          },
+          }..remove('permissionsJson'),
       ],
     });
   }
@@ -317,6 +328,31 @@ class Market {
     final Object? rawKeywords = listing?['keywords'];
     final Object? rawPermissions = listing?['permissions'];
     final Object? rawShots = listing?['screenshots'];
+    // permissions 声明列表(契约 §5):{key,title,usage} 形态对齐 dsh-go 详情
+    // 页现成 section(老 APK 兼容,不动形态)。数据源改从 bundle.json 安装
+    // 落库的 permissions_json 生成(title=目录中文名,usage=app 的 desc);
+    // 无声明回退 store.json 旧链路(14 个现存 app 该链路全空,行为不变)。
+    final Map<String, Object?>? manifestPermissions =
+        permissionsForMarket(version?['permissions_json'] as String?);
+    final List<Map<String, Object?>> permissions = <Map<String, Object?>>[
+      if (manifestPermissions != null)
+        for (final dynamic scope in manifestPermissions['scopes'] as List<Object?>)
+          if (scope is Map<String, Object?>)
+            <String, Object?>{
+              'key': scope['key'] as String? ?? '',
+              'title': scope['title'] as String? ?? '',
+              'usage': scope['usage'] as String? ?? '',
+            }
+      else if (rawPermissions is List)
+        for (final dynamic permission in rawPermissions)
+          if (permission is Map<String, Object?>)
+            <String, Object?>{
+              // Keep only the three renderable string fields; anything
+              // else a package smuggled into a permission stays in the DB.
+              for (final String key in const <String>['key', 'title', 'usage'])
+                if (permission[key] is String) key: permission[key] as String,
+            },
+    ];
     // 不写成 `listing?['collects'] is bool ? listing?['collects'] : false`:
     // 真分支的 ?[ 会被当成嵌套三元解析(实测 analyze 报错),先提升为变量。
     final Object? rawCollects = listing?['collects'];
@@ -345,17 +381,7 @@ class Market {
       'compatibility': listing?['compatibility'] as String? ?? '',
       'whatsNew': whatsNew,
       'collects': collects,
-      'permissions': [
-        if (rawPermissions is List)
-          for (final dynamic permission in rawPermissions)
-            if (permission is Map<String, Object?>)
-              <String, Object?>{
-                // Keep only the three renderable string fields; anything
-                // else a package smuggled into a permission stays in the DB.
-                for (final String key in const <String>['key', 'title', 'usage'])
-                  if (permission[key] is String) key: permission[key] as String,
-              },
-      ],
+      'permissions': permissions,
       // Stored file names become same-host absolute URLs (see [_iconUrl]).
       'screenshots': [
         if (rawShots is List)
@@ -497,6 +523,7 @@ class Market {
     String? changelog,
     String? iconKey,
     String? toolsJson,
+    String? permissionsJson,
     String? minContainer,
     String? description,
     String? category,
@@ -573,6 +600,7 @@ class Market {
       icon: icon,
       iconFile: iconFile,
       toolsJson: toolsJson,
+      permissionsJson: permissionsJson,
       minContainer: minContainer,
       listingJson: listingJson,
     );
@@ -742,6 +770,7 @@ class Market {
       icon: donor['icon'] as String?,
       iconFile: iconFile,
       toolsJson: donor['tools_json'] as String?,
+      permissionsJson: donor['permissions_json'] as String?,
       minContainer: donor['min_container'] as String?,
       listingJson: listingJson,
     );

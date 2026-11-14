@@ -136,6 +136,9 @@ class BundleService {
       backend: manifest.backend != null,
       autoSync: manifest.autoSync,
       toolsJson: manifest.backend?.toolsJson,
+      // permissions 声明段(契约 §2/§5):严式校验过段随版本行落库,市场
+      // 透传从这里重塑;缺段=null(纯展示 app 零影响)。
+      permissionsJson: manifest.permissionsJson,
       actor: 'bundle',
       action: 'bundle.install',
     );

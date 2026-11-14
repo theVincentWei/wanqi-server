@@ -561,4 +561,206 @@ void main() {
           contains('must be an object with a "tools" array'));
     });
   });
+
+  group('permissions 声明段(契约 §2,严式校验)', () {
+    Object manifestWith(Object? permissions) => <String, Object?>{
+          'spec': 1,
+          'appId': 'wanqi-test-app',
+          'name': '测试应用',
+          'version': <String, Object?>{'code': 1, 'name': '0.0.1'},
+          'frontend': <String, Object?>{'entry': 'pages/index/index'},
+          if (permissions != null) 'permissions': permissions,
+        };
+
+    BundleGateResult gateWith(Object? permissions) => gateBundle(
+        archiveOf(
+            zipOf(goodFiles(bundleJson: jsonEncode(manifestWith(permissions))))),
+        zipBytes: 100);
+
+    test('缺段=合法(纯展示 app 零改动零发版)', () {
+      final BundleGateResult gate = gateWith(null);
+      expect(gate.rejected, isFalse);
+      expect(gate.manifest!.permissions, isNull);
+      expect(gate.manifest!.permissionsJson, isNull);
+    });
+
+    test('空段归一为未声明:permissionsJson 为 null', () {
+      final BundleGateResult gate = gateWith(<String, Object?>{});
+      expect(gate.rejected, isFalse);
+      expect(gate.manifest!.permissionsJson, isNull);
+    });
+
+    test('合法段(scopes+network)通过,permissionsJson 可编码', () {
+      final BundleGateResult gate = gateWith(<String, Object?>{
+        'scopes': <Object?>[
+          <String, Object?>{
+            'scope': 'scope.record',
+            'desc': '录音测试需要麦克风',
+          },
+        ],
+        'network': <String, Object?>{
+          'domains': <String>['https://open.bigmodel.cn'],
+        },
+      });
+      expect(gate.rejected, isFalse);
+      final BundlePermissions permissions = gate.manifest!.permissions!;
+      expect(permissions.scopes.single.scope, 'scope.record');
+      expect(permissions.scopes.single.desc, '录音测试需要麦克风');
+      expect(permissions.domains, <String>['https://open.bigmodel.cn']);
+      expect(gate.manifest!.permissionsJson, contains('scope.record'));
+    });
+
+    test('目录内全部 scope 声明合法(userLocation 声明合法,容器 v1 诚实 not supported)', () {
+      for (final String scope in bundleScopeCatalog.keys) {
+        final BundleGateResult gate = gateWith(<String, Object?>{
+          'scopes': <Object?>[
+            <String, Object?>{'scope': scope, 'desc': '测试'},
+          ],
+        });
+        expect(gate.rejected, isFalse, reason: 'scope=$scope must be accepted');
+      }
+    });
+
+    test('未知 scope 拒装(400)', () {
+      final BundleGateResult gate = gateWith(<String, Object?>{
+        'scopes': <Object?>[
+          <String, Object?>{'scope': 'scope.userAlbums', 'desc': 'x'},
+        ],
+      });
+      expect(gate.rejected, isTrue);
+      expect(gate.error, contains('unknown scope'));
+      expect(gate.statusCode, 400);
+    });
+
+    test('缺 desc / 空 desc / 空白 desc / 非 string desc 拒装', () {
+      for (final Object? desc in <Object?>[null, '', '   ', 42]) {
+        final BundleGateResult gate = gateWith(<String, Object?>{
+          'scopes': <Object?>[
+            <String, Object?>{
+              'scope': 'scope.record',
+              if (desc != null) 'desc': desc,
+            },
+          ],
+        });
+        expect(gate.rejected, isTrue, reason: 'desc=$desc must be rejected');
+        expect(gate.error, contains('non-empty'));
+      }
+    });
+
+    test('坏域名拒装:无 scheme/非 http(s)/无 host/垃圾串/非 string', () {
+      for (final Object? domain in <Object?>[
+        'open.bigmodel.cn',
+        'ftp://open.bigmodel.cn',
+        'https://',
+        'not a url',
+        123,
+      ]) {
+        final BundleGateResult gate = gateWith(<String, Object?>{
+          'network': <String, Object?>{
+            'domains': <Object?>[domain],
+          },
+        });
+        expect(gate.rejected, isTrue, reason: 'domain=$domain must be rejected');
+        expect(gate.error, contains('http(s)'));
+      }
+    });
+
+    test('合法域名形态:裸 origin、带 path、带端口都收', () {
+      for (final String domain in <String>[
+        'https://open.bigmodel.cn',
+        'https://api.example.com/v1',
+        'http://api.example.com:8080',
+      ]) {
+        final BundleGateResult gate = gateWith(<String, Object?>{
+          'network': <String, Object?>{
+            'domains': <String>[domain],
+          },
+        });
+        expect(gate.rejected, isFalse, reason: 'domain=$domain');
+      }
+    });
+
+    test('形状坏一律拒装:permissions 非 object/scopes 非 list/条目非 object/network 非 object/domains 非 list', () {
+      final List<Object?> bad = <Object?>[
+        <String>['nope'],
+        <String, Object?>{'scopes': 'record'},
+        <String, Object?>{'scopes': <Object?>['scope.record']},
+        <String, Object?>{'network': <String>['https://x.cn']},
+        <String, Object?>{
+          'network': <String, Object?>{'domains': 'https://x.cn'},
+        },
+      ];
+      for (final Object? permissions in bad) {
+        final BundleGateResult gate = gateWith(permissions);
+        expect(gate.rejected, isTrue,
+            reason: 'permissions=$permissions must be rejected');
+      }
+    });
+
+    test('市场透传形态:scopes[].{key,title,usage,mode} + network.domains,重复 scope 去重保留首条', () {
+      final Map<String, Object?> shaped = permissionsForMarket(jsonEncode(
+          <String, Object?>{
+            'scopes': <Object?>[
+              <String, Object?>{
+                'scope': 'scope.record',
+                'desc': '录音测试需要麦克风',
+              },
+              <String, Object?>{
+                'scope': 'scope.record',
+                'desc': '重复条目',
+              },
+              <String, Object?>{'scope': 'scope.contacts', 'desc': '加联系人'},
+            ],
+            'network': <String, Object?>{
+              'domains': <String>['https://open.bigmodel.cn'],
+            },
+          }))!;
+      expect(shaped.keys, containsAll(<String>['scopes', 'network']));
+      final List<Object?> scopes = shaped['scopes'] as List<Object?>;
+      expect(scopes.length, 2);
+      final Map<String, Object?> record = scopes.first as Map<String, Object?>;
+      expect(record['key'], 'scope.record');
+      expect(record['title'], '麦克风/录音');
+      expect(record['usage'], '录音测试需要麦克风');
+      expect(record['mode'], '授权级');
+      final Map<String, Object?> contacts = scopes.last as Map<String, Object?>;
+      expect(contacts['key'], 'scope.contacts');
+      expect(contacts['mode'], '声明级');
+      expect((shaped['network'] as Map<String, Object?>)['domains'],
+          <String>['https://open.bigmodel.cn']);
+    });
+
+    test('占位级 scope 透传 mode=占位级(契约 §1 三级分级)', () {
+      final Map<String, Object?> shaped = permissionsForMarket(jsonEncode(
+          <String, Object?>{
+            'scopes': <Object?>[
+              <String, Object?>{'scope': 'scope.camera', 'desc': '拍照'},
+            ],
+          }))!;
+      expect(
+          ((shaped['scopes'] as List<Object?>).single as Map<String, Object?>)[
+              'mode'],
+          '占位级');
+    });
+
+    test('无声明/垃圾落库 JSON → null(市场端渲染为无声明)', () {
+      expect(permissionsForMarket(null), isNull);
+      expect(permissionsForMarket(''), isNull);
+      expect(permissionsForMarket('{not json'), isNull);
+      expect(permissionsForMarket('[]'), isNull);
+      expect(
+          permissionsForMarket(jsonEncode(<String, Object?>{
+            'scopes': <Object?>[],
+            'network': <String, Object?>{'domains': <String>[]},
+          })),
+          isNull);
+    });
+
+    test('isValidExternalDomain:scheme http/https + 非空 host', () {
+      expect(isValidExternalDomain('https://open.bigmodel.cn'), isTrue);
+      expect(isValidExternalDomain('http://127.0.0.1:7610'), isTrue);
+      expect(isValidExternalDomain('open.bigmodel.cn'), isFalse);
+      expect(isValidExternalDomain(''), isFalse);
+    });
+  });
 }

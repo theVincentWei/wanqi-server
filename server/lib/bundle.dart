@@ -117,6 +117,191 @@ String? validateToolsManifest(Object? decoded) {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// permissions 声明段(平台权限契约 v1.0 §1/§2,2026-11-14 冻结)
+//
+// 单一来源:[bundleScopeCatalog] 同时是 bundle.json 门禁的 scope 白名单和
+// 市场透传的 title/mode 出处——scope 串与分级字面量在两处永不漂移。
+// ---------------------------------------------------------------------------
+
+/// One frozen catalog row (契约 §1): the market-facing Chinese display name
+/// plus the contract's authorisation level. Levels, verbatim: 授权级 =
+/// first-use native dialog persisted per appId; 声明级 = usable once
+/// declared, no dialog; 占位级 = catalogued but the v1 container honestly
+/// fails the calls — declaring is still legal, enforcement is the
+/// container's job, this layer only validates the declaration itself.
+class BundleScopeSpec {
+  const BundleScopeSpec({required this.title, required this.mode});
+
+  final String title;
+  final String mode;
+}
+
+/// The frozen scope directory (契约 §1). network.external is deliberately
+/// absent — external domains are declared under `permissions.network`
+/// and travel the wire as `network.domains`, never as a scope key.
+const Map<String, BundleScopeSpec> bundleScopeCatalog =
+    <String, BundleScopeSpec>{
+  'scope.record': BundleScopeSpec(title: '麦克风/录音', mode: '授权级'),
+  'scope.notification': BundleScopeSpec(title: '本地通知/订阅消息', mode: '授权级'),
+  'scope.contacts': BundleScopeSpec(title: '通讯录', mode: '声明级'),
+  'scope.camera': BundleScopeSpec(title: '相机', mode: '占位级'),
+  'scope.writePhotosAlbum': BundleScopeSpec(title: '保存到相册', mode: '占位级'),
+  'scope.bluetooth': BundleScopeSpec(title: '蓝牙', mode: '占位级'),
+  'scope.clipboard': BundleScopeSpec(title: '剪贴板', mode: '占位级'),
+  'scope.userLocation': BundleScopeSpec(title: '位置信息', mode: '占位级'),
+};
+
+/// One entry of bundle.json `permissions.scopes` (契约 §2). [desc] is the
+/// consent-dialog copy (弹窗文案) and is mandatory.
+class BundlePermissionScope {
+  const BundlePermissionScope({required this.scope, required this.desc});
+
+  final String scope;
+  final String desc;
+
+  Map<String, Object?> toJson() =>
+      <String, Object?>{'scope': scope, 'desc': desc};
+}
+
+/// The optional `permissions` section of bundle.json (契约 §2). Null on the
+/// manifest = the app declares nothing sensitive — the 12 display-only apps
+/// install untouched (缺段=合法).
+class BundlePermissions {
+  const BundlePermissions({required this.scopes, required this.domains});
+
+  final List<BundlePermissionScope> scopes;
+
+  /// http(s) origins the app may reach beyond the box; empty = 本机网关 only
+  /// (契约 §1 network.external 缺省语义).
+  final List<String> domains;
+
+  bool get isEmpty => scopes.isEmpty && domains.isEmpty;
+
+  /// The declaration encoded for `app_versions.permissions_json` (同
+  /// tools_json 形态), or null when nothing is declared.
+  String? get permissionsJson => isEmpty
+      ? null
+      : jsonEncode(<String, Object?>{
+          'scopes': <Object?>[for (final s in scopes) s.toJson()],
+          'network': <String, Object?>{'domains': domains},
+        });
+}
+
+/// Parses and strictly validates the optional `permissions` section (契约 §2,
+/// 严式校验照抄 backend.tools 先例:坏声明直接 [BundleException] 拒装;老 server
+/// 按未知字段忽略整个段,spec §3 R1 演进规则天然兼容)。Null input = no section.
+BundlePermissions? parseBundlePermissions(Object? raw) {
+  if (raw == null) return null;
+  if (raw is! Map<String, Object?>) {
+    throw BundleException('bundle.json "permissions" must be an object');
+  }
+  final List<BundlePermissionScope> scopes = <BundlePermissionScope>[];
+  final Object? rawScopes = raw['scopes'];
+  if (rawScopes != null) {
+    if (rawScopes is! List) {
+      throw BundleException('bundle.json "permissions.scopes" must be a list');
+    }
+    for (final dynamic entry in rawScopes) {
+      if (entry is! Map<String, Object?>) {
+        throw BundleException(
+            'bundle.json "permissions.scopes": each entry must be an object');
+      }
+      final Object? scope = entry['scope'];
+      if (scope is! String || !bundleScopeCatalog.containsKey(scope)) {
+        throw BundleException(
+            'bundle.json "permissions.scopes": unknown scope "$scope" — must be '
+            'one of the frozen catalog (${bundleScopeCatalog.keys.join(', ')})');
+      }
+      final Object? desc = entry['desc'];
+      if (desc is! String || desc.trim().isEmpty) {
+        throw BundleException(
+            'bundle.json "permissions.scopes": scope "$scope" needs a non-empty '
+            '"desc" (弹窗文案)');
+      }
+      scopes.add(BundlePermissionScope(scope: scope, desc: desc.trim()));
+    }
+  }
+  final List<String> domains = <String>[];
+  final Object? rawNetwork = raw['network'];
+  if (rawNetwork != null) {
+    if (rawNetwork is! Map<String, Object?>) {
+      throw BundleException('bundle.json "permissions.network" must be an object');
+    }
+    final Object? rawDomains = rawNetwork['domains'];
+    if (rawDomains != null) {
+      if (rawDomains is! List) {
+        throw BundleException(
+            'bundle.json "permissions.network.domains" must be a list');
+      }
+      for (final dynamic domain in rawDomains) {
+        if (domain is! String || !isValidExternalDomain(domain)) {
+          throw BundleException(
+              'bundle.json "permissions.network.domains": "$domain" is not a '
+              'valid http(s) URL');
+        }
+        domains.add(domain);
+      }
+    }
+  }
+  return BundlePermissions(scopes: scopes, domains: domains);
+}
+
+/// 契约 §2:domains 必须是合法 http(s) URL — scheme http/https + 非空 host。
+/// Path 允许(声明的是可达性,匹配语义归容器执法侧,契约 §3)。
+bool isValidExternalDomain(String value) {
+  final Uri? uri = Uri.tryParse(value);
+  if (uri == null) return false;
+  if (uri.scheme != 'http' && uri.scheme != 'https') return false;
+  return uri.host.isNotEmpty;
+}
+
+/// Market transmit shaping (契约 §5): re-renders a stored
+/// `permissions_json` into the shape the dsh-go host renders —
+/// `{"scopes":[{"key","title","usage","mode"}],"network":{"domains":[…]}}`.
+/// title = 中文名 from [bundleScopeCatalog], usage = the app's own desc,
+/// mode = 契约 §1 分级. Null / undeclared / corrupt stored JSON → null
+/// (callers omit or emit null — both read as 「无声明」 downstream).
+Map<String, Object?>? permissionsForMarket(String? permissionsJson) {
+  if (permissionsJson == null || permissionsJson.isEmpty) return null;
+  Object? decoded;
+  try {
+    decoded = jsonDecode(permissionsJson);
+  } catch (_) {
+    return null;
+  }
+  if (decoded is! Map<String, Object?>) return null;
+  final List<Map<String, Object?>> scopes = <Map<String, Object?>>[];
+  final Object? rawScopes = decoded['scopes'];
+  if (rawScopes is List) {
+    final Set<String> seen = <String>{};
+    for (final dynamic entry in rawScopes) {
+      if (entry is! Map<String, Object?>) continue;
+      final Object? key = entry['scope'];
+      if (key is! String || !seen.add(key)) continue; // 去重,保留首条
+      final BundleScopeSpec? spec = bundleScopeCatalog[key];
+      final Object? usage = entry['desc'];
+      scopes.add(<String, Object?>{
+        'key': key,
+        'title': spec?.title ?? key,
+        if (usage is String && usage.isNotEmpty) 'usage': usage,
+        'mode': spec?.mode ?? '占位级',
+      });
+    }
+  }
+  final Object? rawNetwork = decoded['network'];
+  final List<String> domains = <String>[
+    if (rawNetwork is Map<String, Object?> && rawNetwork['domains'] is List)
+      for (final dynamic domain in rawNetwork['domains'] as List)
+        if (domain is String && domain.isNotEmpty) domain,
+  ];
+  if (scopes.isEmpty && domains.isEmpty) return null;
+  return <String, Object?>{
+    'scopes': scopes,
+    'network': <String, Object?>{'domains': domains},
+  };
+}
+
 /// A parsed bundle.json. Only the fields the server consumes live here;
 /// unknown fields are dropped by design (§3 evolution rule).
 class BundleManifest {
@@ -129,6 +314,7 @@ class BundleManifest {
     required this.frontendEntry,
     required this.backend,
     this.autoSync = false,
+    this.permissions,
   });
 
   final int spec;
@@ -146,6 +332,14 @@ class BundleManifest {
   /// autoSync 静默同步(万器扩展,R1 演进规则安全:老 server 按未知字段忽略,
   /// 缺省 false)。true = 手机宿主可在后台静默安装/升级这个 app,不弹确认。
   final bool autoSync;
+
+  /// Null = the app declares nothing sensitive (契约 §2:缺段=合法,纯展示
+  /// app 零改动零发版)。声明本身在这里被严式校验;能力执法在容器侧。
+  final BundlePermissions? permissions;
+
+  /// The permissions declaration encoded for `app_versions.permissions_json`
+  /// (同 tools_json 形态), or null when nothing is declared.
+  String? get permissionsJson => permissions?.permissionsJson;
 
   /// Parses decoded bundle.json, throwing [BundleException] on anything the
   /// server cannot safely consume.
@@ -198,6 +392,9 @@ class BundleManifest {
       // 万器扩展:autoSync(顶层可选 bool,缺省 false;非 bool 值按 false 处理,
       // 与 spec R1「未知/坏字段忽略」同口径)。
       autoSync: decoded['autoSync'] is bool ? decoded['autoSync'] as bool : false,
+      // permissions 声明段(契约 §2,可选):严式校验,坏声明直接拒装——
+      // 在 parse 层做,gateBundle 走 BundleManifest.parse 即天然覆盖。
+      permissions: parseBundlePermissions(decoded['permissions']),
     );
   }
 

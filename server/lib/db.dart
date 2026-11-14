@@ -150,6 +150,7 @@ class Db {
         'icon VARCHAR(16) NULL,'
         'icon_file VARCHAR(128) NULL,'
         'tools_json MEDIUMTEXT NULL,'
+        'permissions_json MEDIUMTEXT NULL,'
         'min_container VARCHAR(32) NULL,'
         'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,'
         'PRIMARY KEY (app_id, version_code))');
@@ -237,6 +238,10 @@ class Db {
       // 商店详情元数据(2026-11-10):main/store.json 白名单化后的整包 JSON,
       // 读取侧解析失败一律按"无详情"降级,所以列保持可空、不设默认值。
       'ALTER TABLE app_versions ADD COLUMN listing_json TEXT NULL',
+      // permissions 声明段(2026-11-14,平台权限契约 v1.0 §2/§5):bundle.json
+      // permissions 声明安装时随版本行落库(同 tools_json 形态),市场透传
+      // 从这里重塑;缺段=未声明敏感能力,NULL,纯展示 app 零影响。
+      'ALTER TABLE app_versions ADD COLUMN permissions_json MEDIUMTEXT NULL',
       // 通知契约 §3.4:consent 的 reject 要「记 itemSettings=reject」,而 §3.1
       // 的 notify_subscriptions 没有这一列。补一列(幂等)承载最近一次
       // accept/reject 结果;accept 的配额记账仍只靠 remain。

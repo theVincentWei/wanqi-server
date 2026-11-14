@@ -99,14 +99,15 @@ class Store {
     String? icon,
     String? iconFile,
     String? toolsJson,
+    String? permissionsJson,
     String? minContainer,
     String? listingJson,
   }) async {
     await db.exec(
         'INSERT INTO app_versions '
-        '(app_id, version_code, version_name, zip_path, sha256, size_bytes, changelog, icon, icon_file, tools_json, min_container, listing_json) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [appId, versionCode, versionName, zipPath, sha256, sizeBytes, changelog, icon, iconFile, toolsJson, minContainer, listingJson]);
+        '(app_id, version_code, version_name, zip_path, sha256, size_bytes, changelog, icon, icon_file, tools_json, permissions_json, min_container, listing_json) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [appId, versionCode, versionName, zipPath, sha256, sizeBytes, changelog, icon, iconFile, toolsJson, permissionsJson, minContainer, listingJson]);
   }
 
   Future<Map<String, Object?>?> latestVersion(String appId) async {
@@ -126,6 +127,7 @@ class Store {
             'icon': rows.first['icon'],
             'icon_file': rows.first['icon_file'],
             'tools_json': rows.first['tools_json'],
+            'permissions_json': rows.first['permissions_json'],
             'min_container': rows.first['min_container'],
             // listing_json 原样字符串(NULL 表示无 store.json 详情),detail/
             // rollback 各自解析;created_at 保留原始值,market 层负责格式化。
@@ -152,6 +154,7 @@ class Store {
             'icon': rows.first['icon'],
             'icon_file': rows.first['icon_file'],
             'tools_json': rows.first['tools_json'],
+            'permissions_json': rows.first['permissions_json'],
             'min_container': rows.first['min_container'],
             'listing_json': rows.first['listing_json'],
           };
@@ -162,7 +165,7 @@ class Store {
         'SELECT a.app_id, a.name, a.path, a.category, a.backend, a.auto_sync, a.created_at, '
         'v.version_code, v.version_name, v.sha256, v.changelog, v.icon, v.icon_file, '
         // listing_json 只为取列表行的一行副标题,解析失败按空串降级。
-        'v.listing_json, v.size_bytes '
+        'v.listing_json, v.size_bytes, v.permissions_json '
         'FROM apps a LEFT JOIN app_versions v '
         'ON v.app_id = a.app_id AND v.version_code = '
         '(SELECT MAX(version_code) FROM app_versions WHERE app_id = a.app_id) '
@@ -184,6 +187,9 @@ class Store {
           'subtitle': _subtitleFrom(row['listing_json']),
           'icon': row['icon'],
           'iconFile': row['icon_file'],
+          // permissions 声明的原始落库 JSON(契约 §2 存储形态);市场层用
+          // permissionsForMarket 重塑为透传形态,本字段不出 API。
+          'permissionsJson': row['permissions_json'],
         },
     ];
   }
