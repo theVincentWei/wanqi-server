@@ -253,6 +253,15 @@ class Store {
         [toolsJson, appId, appId]);
   }
 
+  /// Pet withdraw (pets_market.dart): drops the market row only — version
+  /// rows and zips stay, so a re-publish continues the same versionCode
+  /// sequence and the phone-side version comparison keeps its floor. (Not
+  /// [deleteApp]: that one also drops the version rows, which would let a
+  /// re-publish reset the versionCode and weaken the phone's version floor.)
+  Future<void> withdrawApp(String appId) async {
+    await db.exec('DELETE FROM apps WHERE app_id = ?', [appId]);
+  }
+
   Future<void> addEvent(String appId, String event, String? detail) async {
     await db.exec(
         'INSERT INTO install_events (app_id, event, detail) VALUES (?, ?, ?)',

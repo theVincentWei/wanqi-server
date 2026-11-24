@@ -77,6 +77,10 @@ class _FakeApi implements WanqiApi {
       List<int> zipBytes,
       {String? name}) async =>
       _result(_Call('publishPet', server, key, petId, zipBytes));
+
+  @override
+  Future<ApiResult> withdrawPet(String server, String key, String petId) async =>
+      _result(_Call('withdrawPet', server, key, petId));
 }
 
 Future<File> tempZip() async {
@@ -208,6 +212,15 @@ void main() {
       expect(code, 0);
       expect(api.calls.single.kind, 'pets');
       expect(api.calls.single.server, 'http://127.0.0.1:7620');
+    });
+
+    test('pet remove posts the withdraw for the petId', () async {
+      final int code = await cli.run(<String>['pet', 'remove', 'home-cat'],
+          out: _Sink(), err: _Sink());
+      expect(code, 0);
+      expect(api.calls.single.kind, 'withdrawPet');
+      expect(api.calls.single.appId, 'home-cat');
+      expect(api.calls.single.key, 'test-key');
     });
 
     test('--server and --key override defaults', () async {

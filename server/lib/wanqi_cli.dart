@@ -41,6 +41,8 @@ Usage: wanqi — Wanqi Bundle CLI
   wanqi pets                         the pet-pack catalog (GET /api/v1/pets)
   wanqi pet publish <zip> [--name 名] publish a pet pack (petId/version read
                                      from the zip's pack.json)
+  wanqi pet remove <petId>           take a pack off the catalog (versions/zips
+                                     stay; a re-publish continues the versionCode)
 
   wanqi serve [--config <path>]      # 前台跑 server(与 launchd 启动器同核,分发形态)
   wanqi service doctor               # 生命周期体检:按 db→server→test 检活+自动拉起;engine(外部)只观察
@@ -89,6 +91,7 @@ abstract class WanqiApi {
   Future<ApiResult> publishPet(String server, String key, String petId,
       List<int> zipBytes,
       {String? name});
+  Future<ApiResult> withdrawPet(String server, String key, String petId);
 }
 
 class HttpWanqiApi implements WanqiApi {
@@ -142,6 +145,12 @@ class HttpWanqiApi implements WanqiApi {
   Future<ApiResult> pets(String server, String key) {
     return _run((client) =>
         client.get(Uri.parse('$server/api/v1/pets'), headers: _headers(key)));
+  }
+
+  @override
+  Future<ApiResult> withdrawPet(String server, String key, String petId) {
+    return _run((client) => client.post(
+        Uri.parse('$server/api/v1/pets/$petId/withdraw'), headers: _headers(key)));
   }
 
   @override
@@ -292,8 +301,23 @@ class WanqiCli {
   /// 自己的 pack.json(顶层或一层目录,唯一候选)读出,server 再核一遍——
   /// petId 写错是干净的 400,不是坏行。
   Future<ApiResult> _pet(List<String> rest) async {
-    if (rest.isEmpty || rest.first != 'publish') {
-      throw WanqiUsageException('pet needs a subcommand: publish');
+    if (rest.isEmpty || (rest.first != 'publish' && rest.first != 'remove')) {
+      throw WanqiUsageException('pet needs a subcommand: publish | remove');
+    }
+    if (rest.first == 'remove') {
+      final ArgParser removeParser = _commonParser();
+      final ArgResults removeParsed;
+      try {
+        removeParsed = removeParser.parse(rest.skip(1).toList());
+      } on ArgParserException catch (error) {
+        throw WanqiUsageException(error.message);
+      }
+      if (removeParsed.rest.isEmpty) {
+        throw WanqiUsageException('pet remove needs a petId');
+      }
+      final String petId = removeParsed.rest.first;
+      return api.withdrawPet(removeParsed['server'] as String,
+          resolveKey(explicit: removeParsed['key'] as String?), petId);
     }
     final ArgParser parser = _commonParser()
       ..addOption('name', help: '展示名(缺省用 pack.json 的 name)');
