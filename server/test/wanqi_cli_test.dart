@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:apphub/wanqi_cli.dart';
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -66,6 +67,16 @@ class _FakeApi implements WanqiApi {
   @override
   Future<ApiResult> list(String server, String key) async =>
       _result(_Call('list', server, key));
+
+  @override
+  Future<ApiResult> pets(String server, String key) async =>
+      _result(_Call('pets', server, key));
+
+  @override
+  Future<ApiResult> publishPet(String server, String key, String petId,
+      List<int> zipBytes,
+      {String? name}) async =>
+      _result(_Call('publishPet', server, key, petId, zipBytes));
 }
 
 Future<File> tempZip() async {
@@ -158,6 +169,45 @@ void main() {
       expect(utf8.decode(Uint8List.fromList(api.calls.single.zipBytes!)),
           'fake zip bytes');
       expect(out.text, startsWith('200'));
+    });
+
+    test('pet publish reads the petId from the zip pack.json', () async {
+      final Directory dir = await Directory.systemTemp.createTemp('wanqi-pet-test-');
+      final packJson = utf8.encode(jsonEncode(<String, Object?>{
+        'id': 'home-cat',
+        'name': '家里的猫',
+        'version': '1.0.0',
+      }));
+      final Archive archive = Archive()
+        ..addFile(ArchiveFile('pack.json', packJson.length, packJson))
+        ..addFile(ArchiveFile('idle.png', 3, <int>[1, 2, 3]));
+      final File zip = File(p.join(dir.path, 'home-cat.zip'));
+      await zip.writeAsBytes(ZipEncoder().encode(archive)!, flush: true);
+      final _Sink out = _Sink();
+      final int code =
+          await cli.run(<String>['pet', 'publish', zip.path, '--name', '小猫'],
+              out: out, err: _Sink());
+      expect(code, 0);
+      expect(api.calls.single.kind, 'publishPet');
+      expect(api.calls.single.appId, 'home-cat');
+      expect(api.calls.single.zipBytes, isNotEmpty);
+      expect(out.text, startsWith('200'));
+      await dir.delete(recursive: true);
+    });
+
+    test('pet publish without a pack.json is a usage error', () async {
+      final File zip = await tempZip(); // fake bytes, not a zip
+      final int code = await cli.run(<String>['pet', 'publish', zip.path],
+          out: _Sink(), err: _Sink());
+      expect(code, 64);
+      expect(api.calls, isEmpty);
+    });
+
+    test('pets lists the pet catalog', () async {
+      final int code = await cli.run(<String>['pets'], out: _Sink(), err: _Sink());
+      expect(code, 0);
+      expect(api.calls.single.kind, 'pets');
+      expect(api.calls.single.server, 'http://127.0.0.1:7620');
     });
 
     test('--server and --key override defaults', () async {

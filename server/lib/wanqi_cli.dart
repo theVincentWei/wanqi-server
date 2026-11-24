@@ -21,6 +21,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:args/args.dart';
 
 import 'package:apphub/server_runner.dart';
@@ -37,6 +38,9 @@ Usage: wanqi — Wanqi Bundle CLI
                                      uninstall; --purge also wipes host data/
                                      logs/DB/packages (手机端整包卸载的清除勾选)
   wanqi list                         list installed apps
+  wanqi pets                         the pet-pack catalog (GET /api/v1/pets)
+  wanqi pet publish <zip> [--name 名] publish a pet pack (petId/version read
+                                     from the zip's pack.json)
 
   wanqi serve [--config <path>]      # 前台跑 server(与 launchd 启动器同核,分发形态)
   wanqi service doctor               # 生命周期体检:按 db→server→test 检活+自动拉起;engine(外部)只观察
@@ -81,6 +85,10 @@ abstract class WanqiApi {
   Future<ApiResult> remove(String server, String key, String appId,
       {bool purge = false});
   Future<ApiResult> list(String server, String key);
+  Future<ApiResult> pets(String server, String key);
+  Future<ApiResult> publishPet(String server, String key, String petId,
+      List<int> zipBytes,
+      {String? name});
 }
 
 class HttpWanqiApi implements WanqiApi {
@@ -128,6 +136,29 @@ class HttpWanqiApi implements WanqiApi {
   Future<ApiResult> list(String server, String key) {
     return _run((client) =>
         client.get(Uri.parse('$server/api/v1/apps'), headers: _headers(key)));
+  }
+
+  @override
+  Future<ApiResult> pets(String server, String key) {
+    return _run((client) =>
+        client.get(Uri.parse('$server/api/v1/pets'), headers: _headers(key)));
+  }
+
+  @override
+  Future<ApiResult> publishPet(String server, String key, String petId,
+      List<int> zipBytes,
+      {String? name}) {
+    return _run((client) => client.post(
+          Uri.parse('$server/api/v1/pets/$petId/versions'),
+          headers: <String, String>{
+            ..._headers(key),
+            'content-type': 'application/zip',
+            if (name != null && name.isNotEmpty)
+              // UTF-8 不进 header(latin-1),base64 传展示名。
+              'x-pet-name-b64': base64Encode(utf8.encode(name)),
+          },
+          body: zipBytes,
+        ));
   }
 
   Map<String, String> _headers(String key) => <String, String>{
@@ -240,6 +271,12 @@ class WanqiCli {
         final ArgResults parsed = _commonParser().parse(rest);
         return api.list(
             parsed['server'] as String, resolveKey(explicit: parsed['key'] as String?));
+      case 'pets':
+        final ArgResults parsed = _commonParser().parse(rest);
+        return api.pets(
+            parsed['server'] as String, resolveKey(explicit: parsed['key'] as String?));
+      case 'pet':
+        return _pet(rest);
       case '':
         throw WanqiUsageException('a command is required');
       default:
@@ -250,6 +287,66 @@ class WanqiCli {
   ArgParser _commonParser() => ArgParser()
     ..addOption('server', defaultsTo: defaultServer)
     ..addOption('key', defaultsTo: '');
+
+  /// `wanqi pet publish <zip> [--name 名]`:宠物包发布。petId/version 从 zip
+  /// 自己的 pack.json(顶层或一层目录,唯一候选)读出,server 再核一遍——
+  /// petId 写错是干净的 400,不是坏行。
+  Future<ApiResult> _pet(List<String> rest) async {
+    if (rest.isEmpty || rest.first != 'publish') {
+      throw WanqiUsageException('pet needs a subcommand: publish');
+    }
+    final ArgParser parser = _commonParser()
+      ..addOption('name', help: '展示名(缺省用 pack.json 的 name)');
+    final ArgResults parsed;
+    try {
+      parsed = parser.parse(rest.skip(1).toList());
+    } on ArgParserException catch (error) {
+      throw WanqiUsageException(error.message);
+    }
+    if (parsed.rest.isEmpty) {
+      throw WanqiUsageException('pet publish needs a zip path');
+    }
+    final String zipPath = parsed.rest.first;
+    final File zip = File(zipPath);
+    if (!await zip.exists()) {
+      throw WanqiUsageException('no such zip: $zipPath');
+    }
+    final List<int> bytes = await zip.readAsBytes();
+    final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    } catch (_) {
+      throw WanqiUsageException('$zipPath is not a zip');
+    }
+    ArchiveFile? packEntry;
+    for (final ArchiveFile file in archive.files) {
+      if (!file.isFile || file.name.split('/').last != 'pack.json') continue;
+      final List<String> pieces = file.name.split('/')..removeWhere((s) => s.isEmpty);
+      if (pieces.length > 2) packEntry = null; // nested too deep
+      if (packEntry != null) {
+        throw WanqiUsageException('zip has more than one pack.json candidate');
+      }
+      packEntry = file;
+    }
+    if (packEntry == null) {
+      throw WanqiUsageException('zip has no top-level pack.json');
+    }
+    final Object? pack;
+    try {
+      pack = jsonDecode(utf8.decode(packEntry.content as List<int>));
+    } catch (_) {
+      throw WanqiUsageException('pack.json is not JSON');
+    }
+    if (pack is! Map || pack['id'] is! String) {
+      throw WanqiUsageException('pack.json has no string id');
+    }
+    return api.publishPet(
+        parsed['server'] as String,
+        resolveKey(explicit: parsed['key'] as String?),
+        pack['id'] as String,
+        bytes,
+        name: parsed['name'] as String?);
+  }
 
   Future<ApiResult> _bundle(List<String> rest) async {
     if (rest.isEmpty) {

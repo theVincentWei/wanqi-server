@@ -20,6 +20,7 @@ import 'package:apphub/market.dart';
 import 'package:apphub/notices.dart';
 import 'package:apphub/notify_push.dart';
 import 'package:apphub/obs.dart';
+import 'package:apphub/pets_market.dart';
 import 'package:apphub/provisioner.dart';
 import 'package:apphub/store.dart';
 
@@ -52,6 +53,8 @@ Future<void> runServer(List<String> args) async {
   final Market market =
       Market(cfg, db, store, backendRunning: provisioner.isRunning);
   final BundleService bundle = BundleService(cfg, db, store, market, gateway, provisioner);
+  // 宠物包分发(market 同一套表,pet- 命名空间):目录/manifest/发布。
+  final PetMarket pets = PetMarket(cfg, db, store);
   // 通知系统(契约 dimina-notify-contract v1;推送 v1 = none,纯客户端拉)。
   final Notices notices = Notices(cfg, db, push: buildPushDispatcher(cfg.push.dispatcher));
   await gateway.reload();
@@ -63,6 +66,7 @@ Future<void> runServer(List<String> args) async {
 
   final shelf.Handler cascade = shelf.Cascade(statusCodes: <int>[404])
       .add(market.router.call)
+      .add(pets.router.call)
       .add(bundle.router.call)
       .add(gateway.adminRouter.call)
       .add(obs.router.call)

@@ -169,6 +169,9 @@ class Store {
         'FROM apps a LEFT JOIN app_versions v '
         'ON v.app_id = a.app_id AND v.version_code = '
         '(SELECT MAX(version_code) FROM app_versions WHERE app_id = a.app_id) '
+        // Pet packs live in the same tables under the `pet-` namespace
+        // (pets_market.dart) — the mini-program market never lists them.
+        'WHERE a.app_id NOT LIKE \'pet-%\' '
         'ORDER BY a.name');
     return <Map<String, Object?>>[
       for (final row in rows)
@@ -190,6 +193,33 @@ class Store {
           // permissions 声明的原始落库 JSON(契约 §2 存储形态);市场层用
           // permissionsForMarket 重塑为透传形态,本字段不出 API。
           'permissionsJson': row['permissions_json'],
+        },
+    ];
+  }
+
+  /// The pet-pack catalog: every `pet-<petId>` app with its latest version,
+  /// for `GET /api/v1/pets` (pets_market.dart). Same join shape as
+  /// [listApps] — the version tables are shared, only the namespace differs.
+  Future<List<Map<String, Object?>>> listPets() async {
+    final List<Map<String, Object?>> rows = await db.q(
+        'SELECT a.app_id, a.name, a.created_at, '
+        'v.version_code, v.version_name, v.sha256, v.size_bytes '
+        'FROM apps a LEFT JOIN app_versions v '
+        'ON v.app_id = a.app_id AND v.version_code = '
+        '(SELECT MAX(version_code) FROM app_versions WHERE app_id = a.app_id) '
+        'WHERE a.app_id LIKE \'pet-%\' ORDER BY a.name');
+    return <Map<String, Object?>>[
+      for (final row in rows)
+        <String, Object?>{
+          // pet-anya-forger → anya-forger; the prefix is a namespace marker,
+          // never part of the id the phone-side pack.json carries.
+          'petId': (row['app_id'] as String).substring('pet-'.length),
+          'name': row['name'],
+          'versionCode': _int(row['version_code']),
+          'versionName': row['version_name'],
+          'sha256': row['sha256'],
+          'sizeBytes': _int(row['size_bytes']),
+          'updatedAt': _iso(row['created_at']),
         },
     ];
   }
