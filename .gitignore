@@ -2,3 +2,5 @@
 server/config.local.json
 server/.dart_tool/
 **/build/
+# 第三方 vendor 包的本地构建产物(历史上曾误入库,已移出跟踪)
+server/third_party/dsh_client/.dart_tool/
