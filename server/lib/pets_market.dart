@@ -259,7 +259,11 @@ class PetMarket {
     await tmp.rename(target.path);
 
     final String path = decoded['path'] is String ? decoded['path'] as String : 'pets/pack';
-    await store.upsertApp(_appId(petId), name, path);
+    // Wanqi's apps rows carry the Bundle v1 backend flags (NOT NULL): a pet
+    // pack is neither a backend bundle nor auto-synced, so pin them false —
+    // an explicit false survives the INSERT, a plain null would not.
+    await store.upsertApp(_appId(petId), name, path,
+        backend: false, autoSync: false);
     await store.insertVersion(
       appId: _appId(petId),
       versionCode: versionCode,
